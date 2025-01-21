@@ -159,7 +159,8 @@ include_directories(BEFORE
 # Source code directories
 file(GLOB_RECURSE src_src 
   src/ADP/MgHx-ADP.cpp 
-  src/ADP/MgHx-mf-V-bulk.cpp  
+  src/ADP/density.cpp
+  #  src/ADP/MgHx-mf-V-bulk.cpp  
   src/Atoms/Atom.cpp    
   src/Atoms/Ghosts.cpp
   src/Atoms/Neighbors.cpp  
@@ -167,7 +168,7 @@ file(GLOB_RECURSE src_src
   src/IO/dump-input.cpp
   src/IO/hdf5-io.cpp
   src/IO/dump-output.cpp
-  src/Mechanical-eqs/Mechanical-Relaxation-bulk.cpp
+  #  src/Mechanical-eqs/Mechanical-Relaxation-bulk.cpp
   src/Numerical/cubic-spline.cpp
   src/Numerical/Quadrature-Measure.cpp
   src/Numerical/Quadrature-Hermitian-3th.cpp

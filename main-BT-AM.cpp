@@ -5,14 +5,13 @@
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
-#include "ADP/MgHx-mf-V-bulk.hpp"
+#include "ADP/density.hpp"
 #include "Atoms/Atom.hpp"
 #include "Atoms/Ghosts.hpp"
 #include "Atoms/Neighbors.hpp"
 #include "Atoms/Topology.hpp"
 #include "IO/dump-input.hpp"
 #include "Macros.hpp"
-#include "Mechanical-eqs/Mechanical-Relaxation-bulk.hpp"
 #include "Numerical/cubic-spline.hpp"
 #include "Periodic-Boundary/boundary_conditions.hpp"
 #include "Variables.hpp"
@@ -110,7 +109,7 @@ int main(int argc, char **argv) {
     init_adp_MgHx(&adp_HH, HH, Inputs);
     init_adp_MgHx(&adp_MgH, MgH, Inputs);
 
-    dmd_equations system_equations = DMD_MgHx_constructor();
+    //    dmd_equations system_equations = DMD_MgHx_constructor();
 
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       Output data
@@ -125,14 +124,120 @@ int main(int argc, char **argv) {
       - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
     //    PetscCall(mechanical_relaxation_bulk(&Simulation, system_equations));
 
-    Vec xi;
-    Kokkos::View<PetscScalar *, Kokkos::Cuda> k_xi;
+    //    Vec xi;
+    //    Kokkos::View<PetscScalar *, Kokkos::Cuda> k_xi;
 
-    PetscCall(DMSwarmCreateLocalVectorFromField(Simulation.atomistic_data,
-                                                "molar-fraction", &xi));
-    PetscCall(VecGetKokkosView(xi, &k_xi));
+    //    PetscCall(DMSwarmCreateLocalVectorFromField(Simulation.atomistic_data,
+    //                                                "molar-fraction", &xi));
+    //    PetscCall(VecGetKokkosView(xi, &k_xi));
 
+    // double
+    // evaluate_rho_i_adp_MgHx_kokkos(unsigned int site_i,           //!
+    //                                const Eigen::MatrixXd &mean_q, //! Mean q
+    //                                const Eigen::VectorXd &xi,     //! Molar
+    //                                fraction const AtomicSpecie *specie, //!
+    //                                Atom const AtomTopology atom_topology_i)
 
+    /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      Compute energy density
+     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+    //! Get local number of sites in the simulation (without ghost)
+    PetscInt n_sites_local = Simulation.n_sites_local;
+
+    //! Get local number of sites in the simulation (with ghost)
+    PetscInt n_sites_local_ghosted;
+    PetscCall(
+        DMSwarmGetLocalSize(Simulation.atomistic_data, &n_sites_local_ghosted));
+
+    //! Get number of ghost particles
+    PetscInt n_sites_ghost = n_sites_local_ghosted - n_sites_local;
+
+    //!
+    PetscInt n_mechanical_sites_local = Simulation.n_mechanical_sites_local;
+
+    //!
+    AtomTopology *atom_topology =
+        (AtomTopology *)malloc(n_sites_local_ghosted * sizeof(AtomTopology));
+
+    for (PetscInt site_u = 0; site_u < n_sites_local_ghosted; site_u++) {
+
+      PetscCall(read_atom_topology(&atom_topology[site_u],
+                                   Simulation.mechanical_neighs_idx[site_u]));
+    }
+
+    //!
+    IS active_mech_sites = Simulation.active_mech_sites;
+    PetscInt *active_mech_sites_ptr;
+    PetscCall(ISGetIndices(active_mech_sites,
+                           (const PetscInt **)&active_mech_sites_ptr));
+
+    PetscScalar *mean_q_ptr;
+    PetscCall(DMSwarmGetField(Simulation.atomistic_data, DMSwarmPICField_coor,
+                              NULL, NULL, (void **)&mean_q_ptr));
+    Eigen::Map<MatrixType> mean_q(mean_q_ptr, n_sites_local_ghosted, 3);
+
+    PetscScalar *mf_rho_ptr;
+    PetscCall(DMSwarmGetField(Simulation.atomistic_data, "mf-rho", NULL, NULL,
+                              (void **)&mf_rho_ptr));
+    Eigen::Map<VectorType> mf_rho(mf_rho_ptr, n_sites_local_ghosted);
+
+    PetscScalar *xi_ptr;
+    PetscCall(DMSwarmGetField(Simulation.atomistic_data, "molar-fraction", NULL,
+                              NULL, (void **)&xi_ptr));
+    Eigen::Map<VectorType> xi(xi_ptr, n_sites_local_ghosted);
+
+    AtomicSpecie *specie_ptr;
+    PetscCall(DMSwarmGetField(Simulation.atomistic_data, "specie", NULL, NULL,
+                              (void **)&specie_ptr));
+
+    PetscInt *idx_q_ptr;
+    PetscCall(DMSwarmGetField(Simulation.atomistic_data, "idx", NULL, NULL,
+                              (void **)&idx_q_ptr));
+
+#pragma omp parallel for schedule(runtime)
+    for (PetscInt mech_site_u = 0; mech_site_u < n_mechanical_sites_local;
+         mech_site_u++) {
+
+      //! Get index of the site u
+      PetscInt site_u = active_mech_sites_ptr[mech_site_u];
+
+      //! @brief Evaluate energy density at site u
+      mf_rho(site_u) = evaluate_rho_i_adp_MgHx_kokkos(
+          site_u, mean_q, xi, specie_ptr, atom_topology[site_u]);
+    }
+
+    //! Migrate ghost field (energy density)
+    //    PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
+    //                                       &idx_q_ptr[n_sites_local],
+    //                                       mf_rho_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data,
+                                  DMSwarmPICField_coor, NULL, NULL,
+                                  (void **)&mean_q_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "mf-rho", NULL,
+                                  NULL, (void **)&mf_rho_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "molar-fraction",
+                                  NULL, NULL, (void **)&xi_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "specie", NULL,
+                                  NULL, (void **)&specie_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "idx", NULL, NULL,
+                                  (void **)&idx_q_ptr));
+
+    PetscCall(ISRestoreIndices(active_mech_sites,
+                               (const PetscInt **)&active_mech_sites_ptr));
+
+    //!  Restore atom topology
+    for (PetscInt site_u = 0; site_u < n_sites_local_ghosted; site_u++) {
+
+      PetscCall(restore_atom_topology(
+          &atom_topology[site_u], Simulation.mechanical_neighs_idx[site_u]));
+    }
+
+    free(atom_topology);
 
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       Output data
@@ -144,7 +249,7 @@ int main(int argc, char **argv) {
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
      Delete the list of active mechanical sites
     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-    PetscInt n_mechanical_sites_local = 0;
+    n_mechanical_sites_local = 0;
     PetscCall(ISGetLocalSize(Simulation.active_mech_sites,
                              &n_mechanical_sites_local));
 
