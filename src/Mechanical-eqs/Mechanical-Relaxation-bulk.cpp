@@ -20,6 +20,7 @@
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+#include "ADP/MgHx-mf-V-bulk.hpp"
 #include "Atoms/Atom.hpp"
 #include "Atoms/Ghosts.hpp"
 #include "Atoms/Neighbors.hpp"
@@ -122,12 +123,12 @@ static PetscErrorCode monitor_equilibrium(SNES snes, PetscInt its,
 PetscErrorCode mechanical_relaxation_bulk(DMD* Simulation,
                                           dmd_equations system_equations) {
 
-  PetscFunctionBegin;
+  PetscFunctionBeginUser;
 
   unsigned int dim = NumberDimensions;
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    Get system topology
+    Get atomistic topology
     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   //! Get local number of sites in the simulation (without ghost)
   PetscInt n_sites_local = Simulation->n_sites_local;
@@ -189,10 +190,10 @@ PetscErrorCode mechanical_relaxation_bulk(DMD* Simulation,
     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   SNES snes;  //! Nonlinear solver context
   KSP ksp;    //! linear solver context
-  PC pc;      //! preconditioner context  
+  PC pc;      //! preconditioner context
   Vec X;      //! Solution vector X := {F}
   Vec Y;      //! Residual vector Y := {dV-dF}
-  Mat J;      //! Jacobian matrix J := {d2V-dF}  
+  Mat J;      //! Jacobian matrix J := {d2V-dF}
   SNESLineSearch linesearch;
   PetscInt SNES_iterations;
 
@@ -389,6 +390,7 @@ PetscErrorCode mechanical_relaxation_bulk(DMD* Simulation,
   local_domain_ll = F_relax * local_domain_ll;
   local_domain_ur = F_relax * local_domain_ur;
 
+
   PetscCall(VecRestoreArrayRead(X, &X_ptr));
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -438,11 +440,9 @@ PetscErrorCode mechanical_relaxation_bulk(DMD* Simulation,
 
 static PetscErrorCode evaluate_RHS(SNES snes, Vec X, Vec Y, void* ctx) {
 
-  PetscFunctionBegin;
+  PetscFunctionBeginUser;
 
   unsigned int dim = NumberDimensions;
-
-  PetscErrorCode err_RAT_u;
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Get user context
@@ -522,6 +522,18 @@ static PetscErrorCode evaluate_RHS(SNES snes, Vec X, Vec Y, void* ctx) {
   double Volume_0 = fabs(lattice_x_B0.dot(lattice_y_B0.cross(lattice_z_B0)));
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Read atom topology
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+  AtomTopology* atom_topology =
+      (AtomTopology*)malloc(n_sites_local_ghosted * sizeof(AtomTopology));
+
+  for (PetscInt site_u = 0; site_u < n_sites_local_ghosted; site_u++) {
+
+    PetscCall(read_atom_topology(&atom_topology[site_u],
+                                 mechanical_neighs_idx[site_u]));
+  }
+
+  /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Compute energy density
    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 #pragma omp parallel for schedule(runtime)
@@ -531,22 +543,10 @@ static PetscErrorCode evaluate_RHS(SNES snes, Vec X, Vec Y, void* ctx) {
     //! Get index of the site u
     PetscInt site_u = active_mech_sites_ptr[mech_site_u];
 
-    //! @brief Get topologic information of site u
-    AtomTopology atom_u_topology;
-    err_RAT_u =
-        read_atom_topology(&atom_u_topology, mechanical_neighs_idx[site_u]);
-
     //! @brief Evaluate energy density at site u
     mf_rho(site_u) = system_equations.evaluate_rho_i(
-        site_u, mean_q, xi, specie_ptr, atom_u_topology);
-
-    //! @brief Restore atom topology
-    err_RAT_u =
-        restore_atom_topology(&atom_u_topology, mechanical_neighs_idx[site_u]);
+        site_u, mean_q, xi, specie_ptr, atom_topology[site_u]);
   }
-
-  //! Check for errors
-  PetscCall(err_RAT_u);
 
   //! Migrate ghost field (energy density)
   PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
@@ -572,32 +572,32 @@ static PetscErrorCode evaluate_RHS(SNES snes, Vec X, Vec Y, void* ctx) {
     //! Get index of the site u
     PetscInt site_u = active_mech_sites_ptr[mech_site_u];
 
-    //! @brief Get topologic information of site u
-    AtomTopology atom_u_topology;
-    err_RAT_u =
-        read_atom_topology(&atom_u_topology, mechanical_neighs_idx[site_u]);
-
     //! @brief Evaluate deformation gradient derivative of the potential at
     //! site i
     Eigen::Matrix3d DV_u_DF = system_equations.evaluate_DV_i_DF(
-        site_u, mean_q, mean_q_ref, xi, mf_rho, specie_ptr, atom_u_topology);
+        site_u, mean_q, mean_q_ref, xi, mf_rho, specie_ptr,
+        atom_topology[site_u]);
 
     //! @brief Add up the local contribution
     for (unsigned int alpha = 0; alpha < dim; alpha++) {
       RHS_local[alpha] += (1.0 / Volume_0) * DV_u_DF(alpha, alpha);
     }
-
-    //! @brief Restore topologic information of site i
-    err_RAT_u =
-        restore_atom_topology(&atom_u_topology, mechanical_neighs_idx[site_u]);
   }
-
-  //! Check for errors
-  PetscCall(err_RAT_u);
 
   //! Perform partial sum reduction of each MPI process and update Y_ptr
   PetscCall(
       MPIU_Allreduce(RHS_local, Y_ptr, 3, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD));
+
+  /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Restore atom topology
+   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+  for (PetscInt site_u = 0; site_u < n_sites_local_ghosted; site_u++) {
+
+    PetscCall(restore_atom_topology(&atom_topology[site_u],
+                                    mechanical_neighs_idx[site_u]));
+  }
+
+  free(atom_topology);
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Restore vectors
@@ -623,7 +623,7 @@ static PetscErrorCode evaluate_RHS(SNES snes, Vec X, Vec Y, void* ctx) {
 static PetscErrorCode monitor_equilibrium(SNES snes, PetscInt its,
                                           PetscReal fnorm, void* ctx) {
 
-  PetscFunctionBegin;
+  PetscFunctionBeginUser;
 
   PetscCall(PetscPrintf(PETSC_COMM_WORLD,
                         "iter = %" PetscInt_FMT "\t||dV_dF|| = %e\n", its,

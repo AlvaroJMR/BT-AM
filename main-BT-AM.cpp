@@ -123,7 +123,16 @@ int main(int argc, char **argv) {
      Relax the system solving the equation DPsi_Du = 0 to get the lattice
       parameter
       - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-    PetscCall(mechanical_relaxation_bulk(&Simulation, system_equations));
+    //    PetscCall(mechanical_relaxation_bulk(&Simulation, system_equations));
+
+    Vec xi;
+    Kokkos::View<PetscScalar *, Kokkos::Cuda> k_xi;
+
+    PetscCall(DMSwarmCreateLocalVectorFromField(Simulation.atomistic_data,
+                                                "molar-fraction", &xi));
+    PetscCall(VecGetKokkosView(xi, &k_xi));
+
+
 
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       Output data

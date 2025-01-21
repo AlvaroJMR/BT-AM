@@ -158,10 +158,8 @@ include_directories(BEFORE
 
 # Source code directories
 file(GLOB_RECURSE src_src 
-  src/ADP/AlCu-ADP.cpp 
   src/ADP/MgHx-ADP.cpp 
   src/ADP/MgHx-mf-V-bulk.cpp  
-  src/ADP/AlCu-mf-V-bulk.cpp  
   src/Atoms/Atom.cpp    
   src/Atoms/Ghosts.cpp
   src/Atoms/Neighbors.cpp  
