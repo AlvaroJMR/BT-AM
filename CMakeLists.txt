@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 
 project("BT: Álvaro Montaño Rosa" LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 # Add MPI (Message Passing Interface)
 option(USE_MPI "Use MPI library" ON)
@@ -18,6 +18,8 @@ option(USE_SLEPc "Use SLEPc library" OFF)
 
 # Add test environment
 option(src_BUILD_TESTING "Use Check library" ON)
+
+option(FORCE_REBUILD_KOKKOS "Recompile Kokkos" ON)
 
 # Include coverage
 option(ENABLE_COVERAGE "Use Check library" OFF)
@@ -79,6 +81,8 @@ message(STATUS "Release mode")
 #set(CMAKE_CXX_FLAGS_RELEASE "-openmp --coverage -Ofast")
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
 endif()
+
+set(Kokkos_COMMON_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Kokkos)
 
 ###############################################################################
 ## dependencies ###############################################################
@@ -147,6 +151,25 @@ if (USE_VTK)
   endif(VTK_FOUND)
 endif(USE_VTK)
 
+if(FORCE_REBUILD_KOKKOS OR NOT Kokkos_FOUND)
+  message(STATUS "Will try to compile Kokkos")
+  if(EXISTS ${Kokkos_COMMON_SOURCE_DIR})
+    add_subdirectory(${Kokkos_COMMON_SOURCE_DIR} kokkos)
+    message(STATUS "Kokkos found in: ${Kokkos_COMMON_SOURCE_DIR}")
+  else()
+    include(FetchContent)
+    FetchContent_Declare(
+      Kokkos
+      GIT_REPOSITORY https://github.com/kokkos/kokkos.git
+      GIT_TAG        4.5.01
+      SOURCE_DIR     ${Kokkos_COMMON_SOURCE_DIR}
+    )
+    FetchContent_MakeAvailable(Kokkos)
+  endif()
+else()
+  message(STATUS "Kokkos found in: ${Kokkos_DIR}")
+endif()
+
 ###############################################################################
 ## Create executable ##########################################################
 ###############################################################################
@@ -181,6 +204,7 @@ file(GLOB_RECURSE src_src
 ## Unit test ##################################################################
 ###############################################################################
 add_executable("exe-BT-AM" ${src_src} main-BT-AM.cpp)
+target_link_libraries(exe-BT-AM PRIVATE Kokkos::kokkos)
 target_compile_definitions("exe-BT-AM" PUBLIC -DGH3TH_INTEGRAL)
 target_compile_definitions("exe-BT-AM" PUBLIC -DNUMERICAL_DERIVATIVES=0)
 

@@ -24,6 +24,7 @@
 #include <petscerror.h>
 #include <petscsf.h>
 #include <petscvec.h>
+#include <Kokkos_Core.hpp>
 
 #ifndef PETSC_SUCCESS
 #define PETSC_SUCCESS 0
@@ -254,6 +255,9 @@ typedef struct {
   /*! @param F: Integrand */
   void (*F)(double *F, const double *xi, const double *q,
             const AtomicSpecie *spc);
+
+  void (*FK)(double *F, const double *xi, const double *q,
+            const AtomicSpecie *spc);          
 
   /*! @param dF_dq: Gradient of the function (analytical) */
   void (*dF_dq)(int direction, double *dF_dq, const double *xi, const double *q,
@@ -914,3 +918,36 @@ static int imin_arg1, imin_arg2;
 #define SIGN(a, b) ((b) >= 0.0 ? fabs(a) : -fabs(a)) s
 
 #endif
+
+
+/*
+ Kokkos 
+*/
+
+typedef Kokkos::DefaultExecutionSpace              DefaultExecSpace;
+typedef DefaultExecSpace::memory_space             DefaultMemorySpace;
+typedef Kokkos::HostSpace                          HostMemorySpace;
+typedef Kokkos::IndexType<PetscInt>                IndexType;
+typedef DefaultExecSpace::array_layout             DefaultLayout;
+
+typedef Kokkos::View<double**, DefaultLayout, DefaultMemorySpace> PetscScalar_Matrix_Default;
+typedef Kokkos::View<PetscScalar*,  DefaultLayout, DefaultMemorySpace> PetscScalar_Vector_Default;
+
+typedef Kokkos::View<double**, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Matrix_Host;
+typedef Kokkos::View<PetscScalar*,  Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Vector_Host;
+
+typedef Kokkos::View<PetscInt*, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscInt_Vector_Host;
+typedef Kokkos::View<PetscInt*, DefaultLayout, DefaultMemorySpace> PetscInt_Vector_Default;
+
+typedef Kokkos::View<AtomTopology*, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> AtomTopology_Host;
+typedef Kokkos::View<AtomTopology*, DefaultLayout, DefaultMemorySpace> AtomTopology_Default;
+
+typedef Kokkos::View<AtomicSpecie*, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> AtomSpecie_Host;
+typedef Kokkos::View<AtomicSpecie*, DefaultLayout, DefaultMemorySpace> AtomSpecie_Default;
+
+typedef Kokkos::View<adpPotential*, Kokkos::LayoutRight, HostMemorySpace> AdpPotencial_Host;
+typedef Kokkos::View<adpPotential*, DefaultLayout, DefaultMemorySpace> AdpPotencial_Device;
+
+typedef Kokkos::View<double*, DefaultLayout, DefaultMemorySpace> View_Double_Vector_Device;
+
+

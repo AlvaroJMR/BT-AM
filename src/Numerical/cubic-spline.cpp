@@ -17,13 +17,14 @@
 #include <math.h>
 #include <stdlib.h>
 #include "Numerical/cubic-spline.hpp"
+#include <Kokkos_Core.hpp>
 // clang-format on
 
 using namespace std;
 
 /********************************************************************************/
 
-int init_spline(CubicSpline* cs, int n, double dx) {
+KOKKOS_FUNCTION int init_spline(CubicSpline* cs, int n, double dx) {
 
   cs->dx = dx;
 
@@ -54,7 +55,7 @@ int init_spline(CubicSpline* cs, int n, double dx) {
 
 /********************************************************************************/
 
-int destroy_spline(CubicSpline* cs) {
+KOKKOS_FUNCTION int destroy_spline(CubicSpline* cs) {
 
   free(cs->x);
 
@@ -81,7 +82,7 @@ int destroy_spline(CubicSpline* cs) {
 
 /********************************************************************************/
 
-double cubic_spline(CubicSpline* cs, double x) {
+KOKKOS_FUNCTION double cubic_spline(CubicSpline* cs, double x) {
 
   double p;  // This variable indicates the relative position in the segment of
              // the cubic spline: x-x_m
@@ -92,12 +93,15 @@ double cubic_spline(CubicSpline* cs, double x) {
   p = x - p;              // p=x-x_m=x-m*dx
   p = min(p, cs->dx);     // comprobation to know if p>dx
 
+  /* std::cout << "Antes de probar el spline: " << std::endl;
+  double test = cs->a[m];    
+  std::cout << "Probar el spline: " << test << std::endl; */
   return cs->a[m] + (cs->b[m] + (cs->c[m] + cs->d[m] * p) * p) * p;
 }
 
 /********************************************************************************/
 
-double d_cubic_spline(CubicSpline* cs, double x) {
+KOKKOS_FUNCTION double d_cubic_spline(CubicSpline* cs, double x) {
 
   double p;  // This variable indicates the relative position in the segment of
              // the cubic spline: x-x_m
@@ -113,7 +117,7 @@ double d_cubic_spline(CubicSpline* cs, double x) {
 
 /********************************************************************************/
 
-double d2_cubic_spline(CubicSpline* cs, double x) {
+KOKKOS_FUNCTION double d2_cubic_spline(CubicSpline* cs, double x) {
 
   double p;  // This variable indicates the relative position in the segment of
              // the cubic spline: x-x_m
