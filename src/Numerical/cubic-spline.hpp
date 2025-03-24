@@ -30,7 +30,6 @@ int init_spline(CubicSpline *cs, int n, double x);
  * @param cs
  * @return STATUS
  */
-int destroy_spline(CubicSpline *cs);
 
 /**
  * @brief

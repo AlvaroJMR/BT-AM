@@ -50,6 +50,12 @@ typedef Eigen::Matrix<int, 1, Eigen::Dynamic> List1D;
 typedef Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
     List2D;
 
+typedef Kokkos::DefaultExecutionSpace              DefaultExecSpace;
+typedef DefaultExecSpace::memory_space             DefaultMemorySpace;
+typedef Kokkos::HostSpace                          HostMemorySpace;
+typedef Kokkos::IndexType<PetscInt>                IndexType;
+typedef DefaultExecSpace::array_layout             DefaultLayout;
+
 /**
  * @brief Create dictionary for the species
  *
@@ -244,6 +250,104 @@ typedef struct {
 
 } AtomTopology;
 
+
+/*******************************************************/
+typedef Kokkos::View<double*, Kokkos::LayoutRight, HostMemorySpace> View_Double_Vector_Host;
+typedef Kokkos::View<double*, DefaultLayout, DefaultMemorySpace> View_Double_Vector_Device;
+
+/**
+ * @brief Nonuniform cubic splines with n intervals
+ *
+ */
+typedef struct CubicSpline {
+
+  //! @param  dx: increment of the independent variable
+  double dx;
+
+  //! @param  n: number of segments of the cubic spline
+  int n;
+
+  #if USE_KOKKOS == 0
+
+  //! @param x: independent variable
+  Eigen::VectorXd x;
+
+  //! @param a: coefficient of grade 0 of the cubic spline function
+  Eigen::VectorXd a;
+
+  //! @param b: coefficient of grade 1 of the cubic spline function
+  Eigen::VectorXd b;
+
+  //! @param c: coefficient of grade 2 of the cubic spline function
+  Eigen::VectorXd c;
+
+  //! @param d: coefficient of grade 3 of the cubic spline function
+  Eigen::VectorXd d;
+
+  //! @param db: coefficient of grade 0 of the first derivative of the cubic
+  //! spline function
+  Eigen::VectorXd db;
+
+  //! @param dc: coefficient of grade 1 of the first derivative of the cubic
+  //! spline function
+  Eigen::VectorXd dc;
+
+  //! @param dd: coefficient of grade 2 of the first derivative of the cubic
+  //! spline function
+  Eigen::VectorXd dd;
+
+  //! @param ddc: coefficient of grade 0 of the second derivative of the cubic
+  //! spline function
+  Eigen::VectorXd ddc;
+
+  //! @param ddd: coefficient of grade 1 of the second derivative of the cubic
+  //! spline function
+  Eigen::VectorXd ddd;
+
+  #endif
+
+  #if USE_KOKKOS == 1
+
+  //! @param x: independent variable
+  View_Double_Vector_Device x;
+
+  //! @param a: coefficient of grade 0 of the cubic spline function
+  View_Double_Vector_Device a;
+
+  //! @param b: coefficient of grade 1 of the cubic spline function
+  View_Double_Vector_Device b;
+
+  //! @param c: coefficient of grade 2 of the cubic spline function
+  View_Double_Vector_Device c;
+
+  //! @param d: coefficient of grade 3 of the cubic spline function
+  View_Double_Vector_Device d;
+
+  //! @param db: coefficient of grade 0 of the first derivative of the cubic
+  //! spline function
+  View_Double_Vector_Device db;
+
+  //! @param dc: coefficient of grade 1 of the first derivative of the cubic
+  //! spline function
+  View_Double_Vector_Device dc;
+
+  //! @param dd: coefficient of grade 2 of the first derivative of the cubic
+  //! spline function
+  View_Double_Vector_Device dd;
+
+  //! @param ddc: coefficient of grade 0 of the second derivative of the cubic
+  //! spline function
+  View_Double_Vector_Device ddc;
+
+  //! @param ddd: coefficient of grade 1 of the second derivative of the cubic
+  //! spline function
+  View_Double_Vector_Device ddd;
+
+  #endif
+
+
+} CubicSpline;
+
 /*******************************************************/
 
 /**
@@ -257,7 +361,7 @@ typedef struct {
             const AtomicSpecie *spc);
 
   void (*FK)(double *F, const double *xi, const double *q,
-            const AtomicSpecie *spc);          
+            const AtomicSpecie *spc, CubicSpline rho_j);          
 
   /*! @param dF_dq: Gradient of the function (analytical) */
   void (*dF_dq)(int direction, double *dF_dq, const double *xi, const double *q,
@@ -280,57 +384,6 @@ typedef struct {
                 const AtomicSpecie *spc);
 
 } potential_function;
-
-/*******************************************************/
-
-/**
- * @brief Nonuniform cubic splines with n intervals
- *
- */
-typedef struct CubicSpline {
-
-  //! @param  dx: increment of the independent variable
-  double dx;
-
-  //! @param  n: number of segments of the cubic spline
-  int n;
-
-  //! @param x: independent variable
-  double *x;
-
-  //! @param a: coefficient of grade 0 of the cubic spline function
-  double *a;
-
-  //! @param b: coefficient of grade 1 of the cubic spline function
-  double *b;
-
-  //! @param c: coefficient of grade 2 of the cubic spline function
-  double *c;
-
-  //! @param d: coefficient of grade 3 of the cubic spline function
-  double *d;
-
-  //! @param db: coefficient of grade 0 of the first derivative of the cubic
-  //! spline function
-  double *db;
-
-  //! @param dc: coefficient of grade 1 of the first derivative of the cubic
-  //! spline function
-  double *dc;
-
-  //! @param dd: coefficient of grade 2 of the first derivative of the cubic
-  //! spline function
-  double *dd;
-
-  //! @param ddc: coefficient of grade 0 of the second derivative of the cubic
-  //! spline function
-  double *ddc;
-
-  //! @param ddd: coefficient of grade 1 of the second derivative of the cubic
-  //! spline function
-  double *ddd;
-
-} CubicSpline;
 
 /*******************************************************/
 
@@ -924,12 +977,6 @@ static int imin_arg1, imin_arg2;
  Kokkos 
 */
 
-typedef Kokkos::DefaultExecutionSpace              DefaultExecSpace;
-typedef DefaultExecSpace::memory_space             DefaultMemorySpace;
-typedef Kokkos::HostSpace                          HostMemorySpace;
-typedef Kokkos::IndexType<PetscInt>                IndexType;
-typedef DefaultExecSpace::array_layout             DefaultLayout;
-
 typedef Kokkos::View<double**, DefaultLayout, DefaultMemorySpace> PetscScalar_Matrix_Default;
 typedef Kokkos::View<PetscScalar*,  DefaultLayout, DefaultMemorySpace> PetscScalar_Vector_Default;
 
@@ -948,6 +995,5 @@ typedef Kokkos::View<AtomicSpecie*, DefaultLayout, DefaultMemorySpace> AtomSpeci
 typedef Kokkos::View<adpPotential*, Kokkos::LayoutRight, HostMemorySpace> AdpPotencial_Host;
 typedef Kokkos::View<adpPotential*, DefaultLayout, DefaultMemorySpace> AdpPotencial_Device;
 
-typedef Kokkos::View<double*, DefaultLayout, DefaultMemorySpace> View_Double_Vector_Device;
 
 

@@ -48,7 +48,8 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
   const PetscScalar_Vector_Default &xi,     //! Molar fraction
   const AtomSpecie_Default &specie,    //! Atom
   const AtomTopology atom_topology_i,
-  const View_Double_Vector_Device mean_q_ij1) {
+  const View_Double_Vector_Device mean_q_ij1,
+  const AdpPotencial_Device adp_Device_Default) {
 
   //! @brief Auxiliar variables
   double rho_i = 0.0;
@@ -92,15 +93,19 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
     std::array<unsigned int, 2>  sites_ij1 = concatenate(site_i, site_j1);
     AtomicSpecie spc_ij1[2] = {spc_i, spc_j1};
 
-    std::cout << "Estoy en el constructor: " << idx_j1 << std::endl;
-
     //! Create functions
     potential_function functions_rho_ij = rho_ij_adp_MgHx_constructor();
 
     //! @brief Compute energy density
     double rho_ij = 0.0;
-    std::cout << "Después constructor: " << idx_j1 << std::endl;
-    functions_rho_ij.FK(&rho_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1);
+    CubicSpline rho_j;
+    if (spc_ij1[1] == Mg) {
+      rho_j = adp_Device_Default(0).rho;
+    } else if (spc_ij1[1] == H) {
+      rho_j = adp_Device_Default(1).rho;
+    }
+
+    functions_rho_ij.FK(&rho_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, rho_j );
     rho_i += rho_ij;
   }
 

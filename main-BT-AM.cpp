@@ -33,10 +33,6 @@ extern adpPotential adp_MgMg;
 extern adpPotential adp_HH;
 extern adpPotential adp_MgH;
 
-extern AdpPotencial_Host adp_MgMg_Kokkos_Host;
-extern AdpPotencial_Host adp_HH_Kokkos_Host;
-extern AdpPotencial_Device adp_HH_Kokkos_Default;
-extern AdpPotencial_Device adp_MgMg_Kokkos_Default;
 
 
 extern char OutputFolder[MAXC];
@@ -206,8 +202,8 @@ int main(int argc, char **argv) {
     PetscCall(DMSwarmGetField(Simulation.atomistic_data, "idx", NULL, NULL,
                               (void **)&idx_q_ptr));
           
-
-/* #pragma omp parallel for schedule(runtime)
+    Kokkos::Timer timer2;
+   #pragma omp parallel for schedule(runtime)
     for (PetscInt mech_site_u = 0; mech_site_u < n_mechanical_sites_local;
          mech_site_u++) {
 
@@ -217,7 +213,9 @@ int main(int argc, char **argv) {
       //! @brief Evaluate energy density at site u
       mf_rho(site_u) = evaluate_rho_i_adp_MgHx_kokkos(
           site_u, mean_q, xi, specie_ptr, atom_topology[site_u]);
-    } */
+    }
+    double time2 = timer2.seconds();
+    std::cout << "Tiempo que ha tardado en las operaciones sin Kokkos: " << time2 << " seconds" << std::endl;
 
     Kokkos::Timer timer;
     PetscScalar_Vector_Host mf_rho_Host(mf_rho_ptr, static_cast<size_t>(n_sites_local_ghosted));
@@ -248,32 +246,43 @@ int main(int argc, char **argv) {
 
     AtomSpecie_Host atomSpecie_Kokkos_Host(specie_ptr, atomSpecie_Index);
     AtomSpecie_Default atomSpecie_Kokkos_Default("atomSpecie_Kokkos_Default", atomSpecie_Index);
-    Kokkos::deep_copy(atomTopology_Kokkos_Default, atomTopology_Kokkos_Host);
+    Kokkos::deep_copy(atomSpecie_Kokkos_Default, atomSpecie_Kokkos_Host);
 
-    adp_MgMg_Kokkos_Host = AdpPotencial_Host("adp_MgMg_Kokkos_Host", 1);
+    //Kokkos::printf("atomSpecie_Index = %d\n", atomSpecie_Index);
+    //Kokkos::printf("specie_ptr[0] = %d\n", static_cast<int>(specie_ptr[0]));
+    //Kokkos::printf("atomTopology_Kokkos_Default[0] = %f\n", atomSpecie_Kokkos_Host(0));
+
+    AdpPotencial_Device adp_Device_Default;
+
+    copy_adpPotential_to_device(adp_Device_Default, adp_MgMg, 0 );
+
+    copy_adpPotential_to_device(adp_Device_Default, adp_HH, 1 );
+
+
+    /* adp_HH_Kokkos_Host = AdpPotencial_Host("adp_HH_Kokkos_Host", 1);
+    adp_HH_Kokkos_Host(0) = adp_HH;
+    adp_HH_Kokkos_Default = AdpPotencial_Device("adp_HH_Kokkos_Default", 1);
+    Kokkos::deep_copy(adp_HH_Kokkos_Default, adp_HH_Kokkos_Host);
+    
+        adp_MgMg_Kokkos_Host = AdpPotencial_Host("adp_MgMg_Kokkos_Host", 1);
     adp_MgMg_Kokkos_Host(0) = adp_MgMg;
     adp_MgMg_Kokkos_Default = AdpPotencial_Device("adp_MgMg_Kokkos_Default", 1);
     Kokkos::deep_copy(adp_MgMg_Kokkos_Default, adp_MgMg_Kokkos_Host);
-
-    adp_HH_Kokkos_Host = AdpPotencial_Host("adp_HH_Kokkos_Host", 1);
-    adp_HH_Kokkos_Host(0) = adp_HH;
-    adp_HH_Kokkos_Default= AdpPotencial_Device("adp_HH_Kokkos_Default", 1);
-    Kokkos::deep_copy(adp_HH_Kokkos_Default, adp_HH_Kokkos_Host);
+    
+    */
 
     View_Double_Vector_Device mean_q_ij1("mean_q_ij1",6);
 
-    /* double test = adp_MgMg_Kokkos_Default(0).rho.a[0];    
-    std::cout << "Probar el spline: " << test << std::endl; */
-
-  Kokkos::parallel_for("Active_mech_sites",Kokkos::RangePolicy<DefaultExecSpace, IndexType> (0, n_mechanical_sites_local), KOKKOS_LAMBDA(PetscInt mech_site_u) {
+  Kokkos::parallel_for("Active_mech_sites", Kokkos::RangePolicy<DefaultExecSpace, IndexType> (0, n_mechanical_sites_local), KOKKOS_LAMBDA(PetscInt mech_site_u) {
 
     PetscInt site_u = active_mech_sites_Kokkos_Default(mech_site_u);
 
     mf_rho_Host(site_u) = evaluate_rho_i_adp_MgHx_kokkos_Device(
-      site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, atomSpecie_Kokkos_Default, atomTopology_Kokkos_Default(site_u), mean_q_ij1);
+      site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, atomSpecie_Kokkos_Default, atomTopology_Kokkos_Default(site_u), mean_q_ij1, adp_Device_Default);
   });
+  Kokkos::fence();
   double time = timer.seconds();
-  std::cout << "Time: " << time << " seconds" << std::endl;
+  std::cout << "Tiempo que ha tardado en las operaciones con Kokkos: " << time << " seconds" << std::endl;
   //
 
 
@@ -350,9 +359,6 @@ int main(int argc, char **argv) {
     PetscCall(destroy_DMD_simulation(&Simulation));
 
     //! @brief Destroy ADP context
-    destroy_adp_MgHx(&adp_MgMg);
-    destroy_adp_MgHx(&adp_HH);
-    destroy_adp_MgHx(&adp_MgH);
 
     // Finalize PETSc
     PetscFinalize();

@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <Kokkos_Core.hpp>
+#include <Utils/KokkosUtils.hpp>
+
 
 
 using namespace std;
@@ -35,10 +37,6 @@ extern adpPotential adp_MgMg;
 extern adpPotential adp_HH;
 extern adpPotential adp_MgH;
 
-extern AdpPotencial_Host adp_MgMg_Kokkos_Host;
-extern AdpPotencial_Host adp_HH_Kokkos_Host;
-extern AdpPotencial_Device adp_HH_Kokkos_Default;
-extern AdpPotencial_Device adp_MgMg_Kokkos_Default;
 
 extern double element_mass[112];
 
@@ -59,8 +57,8 @@ static void rho_ij(double* rho_ij, const double* n_ij, const double* q_ij,
  * @param n_ij Occupancy of sites i and j
  * @param q_ij Coordinates of sites i and j
  */
-static void rho_ij_kokkos(double* rho_ij, const double* n_ij, const double* q_ij,
-  const AtomicSpecie* spc_ij);
+KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n_ij, const double* q_ij,
+  const AtomicSpecie* spc_ij, CubicSpline rho_j);
 
 /**
  * @brief Function to compute the gradient of the energy density between sites i
@@ -519,10 +517,6 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
 
 /********************************************************************************/
 
-void destroy_adp_MgHx(adpPotential* adp) { destroy_spline(&adp->rho); }
-
-/********************************************************************************/
-
 potential_function rho_ij_adp_MgHx_constructor() {
   potential_function rho_ij_adp_MgHx;
   rho_ij_adp_MgHx.F = rho_ij;
@@ -543,7 +537,7 @@ potential_function rho_ij_adp_MgHx_constructor() {
 /********************************************************************************/
 
 KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
-                   const AtomicSpecie* spc) {
+  const AtomicSpecie* spc, CubicSpline rho_j) {
 
   unsigned int dim = NumberDimensions;
   unsigned int i = 0, j = 1;
@@ -554,25 +548,26 @@ KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const
   *rho_ij = 0.0;
 
   //! Set cubic spline to evaluate the energy density
-  CubicSpline rho_j;
-  if (spc[j] == Mg) {
+  // CubicSpline rho_j;
+  /* if (spc[j] == Mg) {
     rho_j = adp_MgMg_Kokkos_Default(0).rho;
   } else if (spc[j] == H) {
     rho_j = adp_HH_Kokkos_Default(0).rho;
-  }
+  } */
 
   //! Compute parameters
   for (unsigned int alpha = 0; alpha < dim; alpha++) {
     r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
-    r2_ij += DSQR(r_ij[alpha]);
+    r2_ij += dsqr(r_ij[alpha]);
   }
-  double norm_r_ij = sqrt(r2_ij);
 
-  *rho_ij = n[j] * cubic_spline(&rho_j, norm_r_ij);
+  double norm_r_ij = sqrt(r2_ij);
+  double result = cubic_spline(&rho_j, norm_r_ij);
+  *rho_ij = n[j] * result;
 }
 
 /********************************************************************************/
-KOKKOS_FUNCTION static void rho_ij(double* rho_ij, const double* n, const double* q,
+ static void rho_ij(double* rho_ij, const double* n, const double* q,
   const AtomicSpecie* spc) {
 
 unsigned int dim = NumberDimensions;

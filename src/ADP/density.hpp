@@ -32,7 +32,8 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
     const PetscScalar_Vector_Default &xi,
     const AtomSpecie_Default &specie,
     const AtomTopology atom_topology_i,
-    const View_Double_Vector_Device mean_q_ij1);
+    const View_Double_Vector_Device mean_q_ij1,
+    const AdpPotencial_Device adp_Device_Default);
 
 double evaluate_rho_i_adp_MgHx_kokkos(unsigned int site_i,           //!
                                       const Eigen::MatrixXd &mean_q, //!

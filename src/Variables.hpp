@@ -141,9 +141,5 @@ double box_z_max = 0.0;
 /****** Kokkos Variables *******/
 /*****************************************/
 
-AdpPotencial_Host adp_MgMg_Kokkos_Host;
-AdpPotencial_Host adp_HH_Kokkos_Host;
-AdpPotencial_Device adp_HH_Kokkos_Default;
-AdpPotencial_Device adp_MgMg_Kokkos_Default;
 
 #endif /* VARIABLES_HPP */

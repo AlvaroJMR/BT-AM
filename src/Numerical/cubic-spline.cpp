@@ -30,55 +30,67 @@ KOKKOS_FUNCTION int init_spline(CubicSpline* cs, int n, double dx) {
 
   cs->n = n;
 
-  cs->x = (double*)calloc((1), sizeof(double));
+  #if USE_KOKKOS == 1
+  cs->x = View_Double_Vector_Device("cs->x", n + 1);
+  Kokkos::deep_copy(cs->x, 0.0);
 
-  cs->a = (double*)calloc((n), sizeof(double));
+  cs->a = View_Double_Vector_Device("cs->a", n + 1);
+  Kokkos::deep_copy(cs->a, 0.0);
 
-  cs->b = (double*)calloc((n), sizeof(double));
+  cs->b = View_Double_Vector_Device("cs->b", n + 1);
+  Kokkos::deep_copy(cs->b, 0.0);
 
-  cs->c = (double*)calloc((n), sizeof(double));
+  cs->c = View_Double_Vector_Device("cs->c", n + 1);
+  Kokkos::deep_copy(cs->c, 0.0);
 
-  cs->d = (double*)calloc((n), sizeof(double));
+  cs->d = View_Double_Vector_Device("cs->d", n + 1);
+  Kokkos::deep_copy(cs->d, 0.0);
 
-  cs->db = (double*)calloc((n), sizeof(double));
+  cs->db = View_Double_Vector_Device("cs->db", n + 1);
+  Kokkos::deep_copy(cs->db, 0.0);
 
-  cs->dc = (double*)calloc((n), sizeof(double));
+  cs->dc = View_Double_Vector_Device("cs->dc", n + 1);
+  Kokkos::deep_copy(cs->dc, 0.0);
 
-  cs->dd = (double*)calloc((n), sizeof(double));
+  cs->dd = View_Double_Vector_Device("cs->dd", n + 1);
+  Kokkos::deep_copy(cs->dd, 0.0);
 
-  cs->ddc = (double*)calloc((n), sizeof(double));
+  cs->ddc = View_Double_Vector_Device("cs->ddc", n + 1);
+  Kokkos::deep_copy(cs->ddc, 0.0);
 
-  cs->ddd = (double*)calloc((n), sizeof(double));
+  cs->ddd = View_Double_Vector_Device("cs->ddd", n + 1);
+  Kokkos::deep_copy(cs->ddd, 0.0);
+
+  #endif
+
+  #if USE_KOKKOS == 0
+
+  cs->x = Eigen::VectorXd::Zero(n + 1);
+
+  cs->a = Eigen::VectorXd::Zero(n + 1);
+
+  cs->b = Eigen::VectorXd::Zero(n + 1);
+
+  cs->c = Eigen::VectorXd::Zero(n + 1);
+
+  cs->d = Eigen::VectorXd::Zero(n + 1);
+
+  cs->db = Eigen::VectorXd::Zero(n + 1);
+
+  cs->dc = Eigen::VectorXd::Zero(n + 1);
+
+  cs->dd = Eigen::VectorXd::Zero(n + 1);
+
+  cs->ddc = Eigen::VectorXd::Zero(n + 1);
+
+  cs->ddd = Eigen::VectorXd::Zero(n + 1);
+  #endif
 
   return EXIT_SUCCESS;
 }
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION int destroy_spline(CubicSpline* cs) {
-
-  free(cs->x);
-
-  free(cs->a);
-
-  free(cs->b);
-
-  free(cs->c);
-
-  free(cs->d);
-
-  free(cs->db);
-
-  free(cs->dc);
-
-  free(cs->dd);
-
-  free(cs->ddc);
-
-  free(cs->ddd);
-
-  return EXIT_SUCCESS;
-}
 
 /********************************************************************************/
 
@@ -88,15 +100,13 @@ KOKKOS_FUNCTION double cubic_spline(CubicSpline* cs, double x) {
              // the cubic spline: x-x_m
   int m;     // This variable indicates the segment of the cubic spline S_m(x)
   m = static_cast<int>(x / cs->dx);
-  m = min(m, cs->n - 1);  // comprobation to konw if m>m_max; m_max=n-1
+  m = min(m, cs->n - 1);  // comprobation to know if m>m_max; m_max=n-1
   p = m * cs->dx;         // x_m=m*dx
   p = x - p;              // p=x-x_m=x-m*dx
   p = min(p, cs->dx);     // comprobation to know if p>dx
 
-  /* std::cout << "Antes de probar el spline: " << std::endl;
-  double test = cs->a[m];    
-  std::cout << "Probar el spline: " << test << std::endl; */
-  return cs->a[m] + (cs->b[m] + (cs->c[m] + cs->d[m] * p) * p) * p;
+  double result = cs->a(m) + (cs->b(m) + (cs->c(m) + cs->d(m) * p) * p) * p;
+  return result;
 }
 
 /********************************************************************************/

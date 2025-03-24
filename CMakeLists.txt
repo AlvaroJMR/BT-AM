@@ -19,6 +19,8 @@ option(USE_SLEPc "Use SLEPc library" OFF)
 # Add test environment
 option(src_BUILD_TESTING "Use Check library" ON)
 
+option(USE_KOKKOS "Use Kokkos" ON)
+
 option(FORCE_REBUILD_KOKKOS "Recompile Kokkos" ON)
 
 # Include coverage
@@ -79,7 +81,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "--coverage -O0 -g -Wall -Wpedantic -Wextra -Wunused-v
 elseif(CMAKE_BUILD_TYPE MATCHES "Release")
 message(STATUS "Release mode")
 #set(CMAKE_CXX_FLAGS_RELEASE "-openmp --coverage -Ofast")
-set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
+#set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
 endif()
 
 set(Kokkos_COMMON_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Kokkos)
@@ -151,24 +153,31 @@ if (USE_VTK)
   endif(VTK_FOUND)
 endif(USE_VTK)
 
-if(FORCE_REBUILD_KOKKOS OR NOT Kokkos_FOUND)
-  message(STATUS "Will try to compile Kokkos")
-  if(EXISTS ${Kokkos_COMMON_SOURCE_DIR})
-    add_subdirectory(${Kokkos_COMMON_SOURCE_DIR} kokkos)
-    message(STATUS "Kokkos found in: ${Kokkos_COMMON_SOURCE_DIR}")
+if(USE_KOKKOS)
+  find_package(Kokkos CONFIG)
+  if(FORCE_REBUILD_KOKKOS OR NOT Kokkos_FOUND)
+    message(STATUS "Will try to compile Kokkos")
+    if(EXISTS ${Kokkos_COMMON_SOURCE_DIR})
+      add_subdirectory(${Kokkos_COMMON_SOURCE_DIR} kokkos)
+      message(STATUS "Kokkos found in: ${Kokkos_COMMON_SOURCE_DIR}")
+    else()
+      include(FetchContent)
+      FetchContent_Declare(
+        Kokkos
+        GIT_REPOSITORY https://github.com/kokkos/kokkos.git
+        GIT_TAG        4.5.01
+        SOURCE_DIR     ${Kokkos_COMMON_SOURCE_DIR}
+      )
+      FetchContent_MakeAvailable(Kokkos)
+    endif()
   else()
-    include(FetchContent)
-    FetchContent_Declare(
-      Kokkos
-      GIT_REPOSITORY https://github.com/kokkos/kokkos.git
-      GIT_TAG        4.5.01
-      SOURCE_DIR     ${Kokkos_COMMON_SOURCE_DIR}
-    )
-    FetchContent_MakeAvailable(Kokkos)
+    message(STATUS "Kokkos found in: ${Kokkos_DIR}")
   endif()
-else()
-  message(STATUS "Kokkos found in: ${Kokkos_DIR}")
-endif()
+  add_definitions(-DUSE_KOKKOS=1)
+else(USE_KOKKOS)  
+  add_definitions(-DUSE_KOKKOS=0)
+endif(USE_KOKKOS)
+
 
 ###############################################################################
 ## Create executable ##########################################################
@@ -176,8 +185,11 @@ endif()
 
 # Include directories
 include_directories(BEFORE
+  /usr/local/cuda-12.4/targets/x86_64-linux/include
   src/
-  external/eigen3)
+  external/eigen3
+  /root/TFG/Cosas_Petsc/petsc/src/binding/petsc4py/src/lib-petsc/compat
+)
 
 # Source code directories
 file(GLOB_RECURSE src_src 
