@@ -57,9 +57,17 @@ static void rho_ij(double* rho_ij, const double* n_ij, const double* q_ij,
  * @param n_ij Occupancy of sites i and j
  * @param q_ij Coordinates of sites i and j
  */
-KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n_ij, const double* q_ij,
-  const AtomicSpecie* spc_ij, CubicSpline rho_j);
+KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
+  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default);
 
+KOKKOS_FUNCTION static void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
+  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default);
+
+KOKKOS_FUNCTION static void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
+  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default); 
+
+KOKKOS_FUNCTION static void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
+  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default);  
 /**
  * @brief Function to compute the gradient of the energy density between sites i
  * and j. (ANALYTICAL)
@@ -454,21 +462,33 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
 
     init_spline(&adp->rho, adp->n_rho, dr_rho);
 
+    #if defined(KOKKOS_ENABLE_CUDA)
+
+    read_spline(f_adp, adp->n_rho, adp->rho );
+
+    #else
     for (i = 0; i < adp->n_rho; i++) {
       error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                      &adp->rho.a[i], &adp->rho.b[i], &adp->rho.c[i],
                      &adp->rho.d[i], &adp->rho.db[i], &adp->rho.dc[i],
                      &adp->rho.dd[i], &adp->rho.ddc[i], &adp->rho.ddd[i]);
     }
+    #endif
     error = fscanf(f_adp, "%d %lf \n", &adp->n_embed, &drho_embed);
     init_spline(&adp->embed, adp->n_embed, drho_embed);
 
+    #if defined(KOKKOS_ENABLE_CUDA)
+
+    read_spline(f_adp, adp->n_embed, adp->embed );
+    
+    #else
     for (i = 0; i < adp->n_embed; i++) {
       error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                      &adp->embed.a[i], &adp->embed.b[i], &adp->embed.c[i],
                      &adp->embed.d[i], &adp->embed.db[i], &adp->embed.dc[i],
                      &adp->embed.dd[i], &adp->embed.ddc[i], &adp->embed.ddd[i]);
     }
+    #endif
   } else {
     error = fscanf(f_adp, "%lf \n",
                    &adp->r_cutoff);  // the r_cutoff is useless here, we read it
@@ -481,35 +501,50 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
   error = fscanf(f_adp, "%d %lf \n", &adp->n_pair, &dr_pair);
   init_spline(&adp->pair, adp->n_pair, dr_pair);
 
+  #if defined(KOKKOS_ENABLE_CUDA)
+
+  read_spline(f_adp, adp->n_pair, adp->pair );
+  
+  #else
   for (i = 0; i < adp->n_pair; i++) {
     error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                    &adp->pair.a[i], &adp->pair.b[i], &adp->pair.c[i],
                    &adp->pair.d[i], &adp->pair.db[i], &adp->pair.dc[i],
                    &adp->pair.dd[i], &adp->pair.ddc[i], &adp->pair.ddd[i]);
   }
-
+  #endif
   //! @brief Read spline for the dipole function u
   error = fscanf(f_adp, "%d %lf \n", &adp->n_u, &dr_u);
   init_spline(&adp->u, adp->n_u, dr_u);
 
+  #if defined(KOKKOS_ENABLE_CUDA)
+
+  read_spline(f_adp, adp->n_u, adp->u );
+  
+  #else
   for (i = 0; i < adp->n_u; i++) {
     error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                    &adp->u.a[i], &adp->u.b[i], &adp->u.c[i], &adp->u.d[i],  //!
                    &adp->u.db[i], &adp->u.dc[i], &adp->u.dd[i],             //!
                    &adp->u.ddc[i], &adp->u.ddd[i]);                         //!
   }
-
+  #endif
   //! @brief Read spline for the quadrupole function w
   error = fscanf(f_adp, "%d %lf \n", &adp->n_w, &dr_w);
   init_spline(&adp->w, adp->n_w, dr_w);
 
+  #if defined(KOKKOS_ENABLE_CUDA)
+
+  read_spline(f_adp, adp->n_w, adp->w );
+  
+  #else
   for (i = 0; i < adp->n_w; i++) {
     error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                    &adp->w.a[i], &adp->w.b[i], &adp->w.c[i], &adp->w.d[i],  //!
                    &adp->w.db[i], &adp->w.dc[i], &adp->w.dd[i],             //!
                    &adp->w.ddc[i], &adp->w.ddd[i]);                         //!
   }
-
+  #endif
   fclose(f_adp);
 
   return EXIT_SUCCESS;
@@ -520,6 +555,7 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
 potential_function rho_ij_adp_MgHx_constructor() {
   potential_function rho_ij_adp_MgHx;
   rho_ij_adp_MgHx.F = rho_ij;
+  rho_ij_adp_MgHx.FK = rho_ij_kokkos;
 
   rho_ij_adp_MgHx.dF_dq = d_rho_ij_dq;
   rho_ij_adp_MgHx.d2F_dq2 = d2_rho_ij_dq2;
@@ -529,7 +565,6 @@ potential_function rho_ij_adp_MgHx_constructor() {
 
   rho_ij_adp_MgHx.dF_dn = d_rho_ij_dn;
 
-  rho_ij_adp_MgHx.FK = rho_ij_kokkos;
 
   return rho_ij_adp_MgHx;
 }
@@ -537,7 +572,7 @@ potential_function rho_ij_adp_MgHx_constructor() {
 /********************************************************************************/
 
 KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, CubicSpline rho_j) {
+  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
 
   unsigned int dim = NumberDimensions;
   unsigned int i = 0, j = 1;
@@ -548,12 +583,12 @@ KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const
   *rho_ij = 0.0;
 
   //! Set cubic spline to evaluate the energy density
-  // CubicSpline rho_j;
-  /* if (spc[j] == Mg) {
-    rho_j = adp_MgMg_Kokkos_Default(0).rho;
-  } else if (spc[j] == H) {
-    rho_j = adp_HH_Kokkos_Default(0).rho;
-  } */
+  CubicSpline rho_j;
+  if (spc[j] == Mg) {
+    rho_j = adp_Device_Default(0).rho;
+  } else if (spc[1] == H) {
+    rho_j = adp_Device_Default(1).rho;
+  }
 
   //! Compute parameters
   for (unsigned int alpha = 0; alpha < dim; alpha++) {
@@ -893,6 +928,7 @@ potential_function V_pair_ij_adp_MgHx_constructor() {
   potential_function V_pair_ij_adp_MgHx;
 
   V_pair_ij_adp_MgHx.F = V_pair_ij;
+  V_pair_ij_adp_MgHx.FK = V_pair_ij_kokkos;
 
   //! Analytical derivatives dV_pair_ij_dq and d2V_pair_ij_dq2
   V_pair_ij_adp_MgHx.dF_dq = dV_pair_ij_dq;
@@ -941,6 +977,39 @@ static void V_pair_ij(double* V_pair_ij, const double* n, const double* q,
   double nn_phi_ij1 = n[i] * n[j] * cubic_spline(&pair_ij, norm_r_ij);
 
   *V_pair_ij = 0.5 * nn_phi_ij1;
+}
+
+KOKKOS_FUNCTION static void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
+  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j = 1;
+double r2_ij = 0.0;
+double r_ij[3];
+
+//! Set to zero the pair term contribution to the energy
+*V_pair_ij = 0.0;
+
+//! Set cubic spline to evaluate the pair interation curve
+CubicSpline pair_ij;
+if ((spc[i] == Mg) && (spc[j] == Mg)) {
+pair_ij = adp_Device_Default(0).pair;
+} else if ((spc[i] == H) && (spc[j] == H)) {
+pair_ij = adp_Device_Default(1).pair;
+} else {
+pair_ij = adp_Device_Default(2).pair;
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+r2_ij += DSQR(r_ij[alpha]);
+}
+double norm_r_ij = sqrt(r2_ij);
+
+double nn_phi_ij1 = n[i] * n[j] * cubic_spline(&pair_ij, norm_r_ij);
+
+*V_pair_ij = 0.5 * nn_phi_ij1;
 }
 
 /********************************************************************************/
@@ -1259,6 +1328,7 @@ potential_function V_dipole_ij1j2_adp_MgHx_constructor() {
   potential_function V_dipole_ij1j2_adp_MgHx;
 
   V_dipole_ij1j2_adp_MgHx.F = V_dipole_ij1j2;
+  V_dipole_ij1j2_adp_MgHx.FK = V_dipole_ij1j2_kokkos;
 
   V_dipole_ij1j2_adp_MgHx.dF_dq = dV_dipole_ij1j2_dq;
   V_dipole_ij1j2_adp_MgHx.d2F_dq2 = dV2_dipole_ij1j2_dq2;
@@ -1324,6 +1394,57 @@ static void V_dipole_ij1j2(double* V_dipole_ij1j2, const double* n,
   *V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
 }
 
+/********************************************************************************/
+
+KOKKOS_FUNCTION static void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
+  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j1 = 1, j2 = 2;
+double r2_ij1 = 0.0;
+double r2_ij2 = 0.0;
+double r_ij1__dot__r_ij2 = 0.0;
+double r_ij1[3];
+double r_ij2[3];
+
+//! Contribution of the dipole to the energy
+*V_dipole_ij1j2 = 0.0;
+
+//! Set cubic spline to evaluate the dipole interation curve
+CubicSpline u_ij1;
+if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+u_ij1 = adp_Device_Default(0).u;
+} else if ((spc[i] == H) && (spc[j1] == H)) {
+u_ij1 = adp_Device_Default(1).u;
+} else {
+u_ij1 = adp_Device_Default(2).u;
+}
+
+CubicSpline u_ij2;
+if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+u_ij2 = adp_Device_Default(0).u;
+} else if ((spc[i] == H) && (spc[j2] == H)) {
+u_ij2 = adp_Device_Default(1).u;
+} else {
+u_ij2 = adp_Device_Default(2).u;
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+r2_ij1 += DSQR(r_ij1[alpha]);
+r2_ij2 += DSQR(r_ij2[alpha]);
+r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+}
+double norm_r_ij1 = sqrt(r2_ij1);
+double norm_r_ij2 = sqrt(r2_ij2);
+
+double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
+double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
+
+*V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
+}
 /********************************************************************************/
 
 static void dV_dipole_ij1j2_dq(int direction, double* dV_dipole_ij1j2_dq,
@@ -1808,6 +1929,8 @@ potential_function V_quadrupole_ij1j2_adp_MgHx_constructor() {
   potential_function V_quadrupole_ij1j2_adp_MgHx;
 
   V_quadrupole_ij1j2_adp_MgHx.F = V_quadrupole_ij1j2;
+  V_quadrupole_ij1j2_adp_MgHx.FK = V_quadrupole_ij1j2_kokkos;
+
 
   V_quadrupole_ij1j2_adp_MgHx.dF_dq = dV_quadrupole_ij1j2_dq;
   V_quadrupole_ij1j2_adp_MgHx.d2F_dq2 = dV2_quadrupole_ij1j2_dq2;
@@ -1872,6 +1995,60 @@ static void V_quadrupole_ij1j2(double* V_quadrupole_ij1_ij2, const double* n,
   *V_quadrupole_ij1_ij2 =
       (1.0 / 2.0) * nn_w_ij1 * nn_w_ij2 * DSQR(r_ij1__dot__r_ij2) -
       (1.0 / 6.0) * nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2;
+}
+
+/*********************************************************************************/
+
+KOKKOS_FUNCTION static void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
+  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j1 = 1, j2 = 2;
+double r2_ij1 = 0.0;
+double r2_ij2 = 0.0;
+double r_ij1__dot__r_ij2 = 0.0;
+double r_ij1[3];
+double r_ij2[3];
+
+//! Set to zero the Partial quadrupole contribution of the sites j and k to i
+*V_quadrupole_ij1_ij2 = 0.0;
+
+//! Set cubic spline to evaluate the dipole interation curve
+CubicSpline w_ij1;
+if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+w_ij1 = adp_MgMg.w;
+} else if ((spc[i] == H) && (spc[j1] == H)) {
+w_ij1 = adp_HH.w;
+} else {
+w_ij1 = adp_MgH.w;
+}
+
+CubicSpline w_ij2;
+if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+w_ij2 = adp_MgMg.w;
+} else if ((spc[i] == H) && (spc[j2] == H)) {
+w_ij2 = adp_HH.w;
+} else {
+w_ij2 = adp_MgH.w;
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+r2_ij1 += DSQR(r_ij1[alpha]);
+r2_ij2 += DSQR(r_ij2[alpha]);
+r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+}
+double norm_r_ij1 = sqrt(r2_ij1);
+double norm_r_ij2 = sqrt(r2_ij2);
+
+double nn_w_ij1 = n[i] * n[j1] * cubic_spline(&w_ij1, norm_r_ij1);
+double nn_w_ij2 = n[i] * n[j2] * cubic_spline(&w_ij2, norm_r_ij2);
+
+*V_quadrupole_ij1_ij2 =
+(1.0 / 2.0) * nn_w_ij1 * nn_w_ij2 * DSQR(r_ij1__dot__r_ij2) -
+(1.0 / 6.0) * nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2;
 }
 
 /********************************************************************************/

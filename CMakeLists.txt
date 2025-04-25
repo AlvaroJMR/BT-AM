@@ -153,30 +153,20 @@ if (USE_VTK)
   endif(VTK_FOUND)
 endif(USE_VTK)
 
+if(DEFINED PETSC_DIR AND DEFINED PETSC_ARCH)
+  set(PETSC_INCLUDE_DIR "${PETSC_DIR}/${PETSC_ARCH}/include")
+  message(STATUS "Usando directorio de includes de PETSc: ${PETSC_INCLUDE_DIR}")
+  include_directories(${PETSC_INCLUDE_DIR})
+else()
+  message(WARNING "Las variables PETSC_DIR y/o PETSC_ARCH no están definidas.")
+endif()
+
 if(USE_KOKKOS)
-  find_package(Kokkos CONFIG)
-  if(FORCE_REBUILD_KOKKOS OR NOT Kokkos_FOUND)
-    message(STATUS "Will try to compile Kokkos")
-    if(EXISTS ${Kokkos_COMMON_SOURCE_DIR})
-      add_subdirectory(${Kokkos_COMMON_SOURCE_DIR} kokkos)
-      message(STATUS "Kokkos found in: ${Kokkos_COMMON_SOURCE_DIR}")
-    else()
-      include(FetchContent)
-      FetchContent_Declare(
-        Kokkos
-        GIT_REPOSITORY https://github.com/kokkos/kokkos.git
-        GIT_TAG        4.5.01
-        SOURCE_DIR     ${Kokkos_COMMON_SOURCE_DIR}
-      )
-      FetchContent_MakeAvailable(Kokkos)
-    endif()
-  else()
-    message(STATUS "Kokkos found in: ${Kokkos_DIR}")
-  endif()
+  find_package(Kokkos CONFIG REQUIRED)
   add_definitions(-DUSE_KOKKOS=1)
-else(USE_KOKKOS)  
+else()
   add_definitions(-DUSE_KOKKOS=0)
-endif(USE_KOKKOS)
+endif()
 
 
 ###############################################################################
@@ -185,10 +175,9 @@ endif(USE_KOKKOS)
 
 # Include directories
 include_directories(BEFORE
-  /usr/local/cuda-12.4/targets/x86_64-linux/include
   src/
   external/eigen3
-  /root/TFG/Cosas_Petsc/petsc/src/binding/petsc4py/src/lib-petsc/compat
+  /usr/lib/x86_64-linux-gnu/hdf5/serial/include
 )
 
 # Source code directories

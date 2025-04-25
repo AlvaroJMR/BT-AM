@@ -24,7 +24,13 @@ using namespace std;
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION int init_spline(CubicSpline* cs, int n, double dx) {
+#if USE_KOKKOS == 1
+  #define SPLINE_FUNCTION KOKKOS_FUNCTION
+#else
+  #define SPLINE_FUNCTION
+#endif
+
+SPLINE_FUNCTION int init_spline(CubicSpline* cs, int n, double dx) {
 
   cs->dx = dx;
 
@@ -94,7 +100,7 @@ KOKKOS_FUNCTION int init_spline(CubicSpline* cs, int n, double dx) {
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION double cubic_spline(CubicSpline* cs, double x) {
+SPLINE_FUNCTION double cubic_spline(CubicSpline* cs, double x) {
 
   double p;  // This variable indicates the relative position in the segment of
              // the cubic spline: x-x_m
@@ -111,7 +117,7 @@ KOKKOS_FUNCTION double cubic_spline(CubicSpline* cs, double x) {
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION double d_cubic_spline(CubicSpline* cs, double x) {
+SPLINE_FUNCTION double d_cubic_spline(CubicSpline* cs, double x) {
 
   double p;  // This variable indicates the relative position in the segment of
              // the cubic spline: x-x_m
@@ -127,7 +133,7 @@ KOKKOS_FUNCTION double d_cubic_spline(CubicSpline* cs, double x) {
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION double d2_cubic_spline(CubicSpline* cs, double x) {
+SPLINE_FUNCTION double d2_cubic_spline(CubicSpline* cs, double x) {
 
   double p;  // This variable indicates the relative position in the segment of
              // the cubic spline: x-x_m

@@ -250,10 +250,28 @@ typedef struct {
 
 } AtomTopology;
 
+typedef Kokkos::View<double**, DefaultLayout, DefaultMemorySpace> PetscScalar_Matrix_Default;
+typedef Kokkos::View<PetscScalar*,  DefaultLayout, DefaultMemorySpace> PetscScalar_Vector_Default;
+
+typedef Kokkos::View<double**, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Matrix_Host;
+typedef Kokkos::View<PetscScalar*,  DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Vector_Host;
+
+typedef Kokkos::View<PetscInt*, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscInt_Vector_Host;
+typedef Kokkos::View<PetscInt*, DefaultLayout, DefaultMemorySpace> PetscInt_Vector_Default;
+
+typedef struct {
+  int numneigh;
+  PetscInt_Vector_Default mech_neighs_ptr;
+} AtomTopologyKokkos;
+
+typedef Kokkos::View<AtomTopologyKokkos*, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> AtomTopologyKokkos_Host;
+typedef Kokkos::View<AtomTopologyKokkos*, DefaultLayout, DefaultMemorySpace> AtomTopologyKokkos_Default;
+
 
 /*******************************************************/
-typedef Kokkos::View<double*, Kokkos::LayoutRight, HostMemorySpace> View_Double_Vector_Host;
+typedef Kokkos::View<double*, DefaultLayout, HostMemorySpace> View_Double_Vector_Host;
 typedef Kokkos::View<double*, DefaultLayout, DefaultMemorySpace> View_Double_Vector_Device;
+typedef Kokkos::View<double**, DefaultLayout, DefaultMemorySpace> View_Double_Matrix_Device;
 
 /**
  * @brief Nonuniform cubic splines with n intervals
@@ -350,42 +368,6 @@ typedef struct CubicSpline {
 
 /*******************************************************/
 
-/**
- * @brief This structures defines a function and its derivatives
- *
- */
-typedef struct {
-
-  /*! @param F: Integrand */
-  void (*F)(double *F, const double *xi, const double *q,
-            const AtomicSpecie *spc);
-
-  void (*FK)(double *F, const double *xi, const double *q,
-            const AtomicSpecie *spc, CubicSpline rho_j);          
-
-  /*! @param dF_dq: Gradient of the function (analytical) */
-  void (*dF_dq)(int direction, double *dF_dq, const double *xi, const double *q,
-                const AtomicSpecie *spc);
-
-  /*! @param d2F_dq2: Hessian of the function (analytical) */
-  void (*d2F_dq2)(int direction, double *d2F_dq2, const double *xi,
-                  const double *q, const AtomicSpecie *spc);
-
-  /*! @param dF_dq_FD: Gradient of the function (numerical) */
-  void (*dF_dq_FD)(int direction, double *dF_dq, const double *xi,
-                   const double *q, const AtomicSpecie *spc);
-
-  /*! @param d2F_dq2_FD: Hessian of the function (numerical) */
-  void (*d2F_dq2_FD)(int direction, double *d2F_dq2, const double *xi,
-                     const double *q, const AtomicSpecie *spc);
-
-  /*! @param dF_dn: Gradient of the function with respect the occupancy */
-  void (*dF_dn)(int direction, double *dF_dn, const double *xi, const double *q,
-                const AtomicSpecie *spc);
-
-} potential_function;
-
-/*******************************************************/
 
 typedef struct dump_file {
 
@@ -970,30 +952,69 @@ static int imin_arg1, imin_arg2;
    (imin_arg1) < (imin_arg2) ? (imin_arg1) : (imin_arg2))
 #define SIGN(a, b) ((b) >= 0.0 ? fabs(a) : -fabs(a)) s
 
-#endif
-
-
 /*
  Kokkos 
 */
 
-typedef Kokkos::View<double**, DefaultLayout, DefaultMemorySpace> PetscScalar_Matrix_Default;
-typedef Kokkos::View<PetscScalar*,  DefaultLayout, DefaultMemorySpace> PetscScalar_Vector_Default;
-
-typedef Kokkos::View<double**, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Matrix_Host;
-typedef Kokkos::View<PetscScalar*,  Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Vector_Host;
-
-typedef Kokkos::View<PetscInt*, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscInt_Vector_Host;
-typedef Kokkos::View<PetscInt*, DefaultLayout, DefaultMemorySpace> PetscInt_Vector_Default;
-
-typedef Kokkos::View<AtomTopology*, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> AtomTopology_Host;
+typedef Kokkos::View<AtomTopology*, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> AtomTopology_Host;
 typedef Kokkos::View<AtomTopology*, DefaultLayout, DefaultMemorySpace> AtomTopology_Default;
 
-typedef Kokkos::View<AtomicSpecie*, Kokkos::LayoutRight, HostMemorySpace, Kokkos::MemoryUnmanaged> AtomSpecie_Host;
+
+typedef Kokkos::View<AtomicSpecie*, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> AtomSpecie_Host;
 typedef Kokkos::View<AtomicSpecie*, DefaultLayout, DefaultMemorySpace> AtomSpecie_Default;
 
-typedef Kokkos::View<adpPotential*, Kokkos::LayoutRight, HostMemorySpace> AdpPotencial_Host;
+typedef Kokkos::View<adpPotential*, DefaultLayout, HostMemorySpace> AdpPotencial_Host;
 typedef Kokkos::View<adpPotential*, DefaultLayout, DefaultMemorySpace> AdpPotencial_Device;
+
+/****************************************************************************************** */
+/**
+ * @brief This structures defines a function and its derivatives
+ *
+ */
+typedef struct {
+
+  /*! @param F: Integrand */
+  void (*F)(double *F, const double *xi, const double *q,
+            const AtomicSpecie *spc);
+
+  void (*FK)(double *F, const double *xi, const double *q,
+            const AtomicSpecie *spc, AdpPotencial_Device adp_Device_Default);
+                   
+
+  /*! @param dF_dq: Gradient of the function (analytical) */
+  void (*dF_dq)(int direction, double *dF_dq, const double *xi, const double *q,
+                const AtomicSpecie *spc);
+
+  /*! @param d2F_dq2: Hessian of the function (analytical) */
+  void (*d2F_dq2)(int direction, double *d2F_dq2, const double *xi,
+                  const double *q, const AtomicSpecie *spc);
+
+  /*! @param dF_dq_FD: Gradient of the function (numerical) */
+  void (*dF_dq_FD)(int direction, double *dF_dq, const double *xi,
+                   const double *q, const AtomicSpecie *spc);
+
+  /*! @param d2F_dq2_FD: Hessian of the function (numerical) */
+  void (*d2F_dq2_FD)(int direction, double *d2F_dq2, const double *xi,
+                     const double *q, const AtomicSpecie *spc);
+
+  /*! @param dF_dn: Gradient of the function with respect the occupancy */
+  void (*dF_dn)(int direction, double *dF_dn, const double *xi, const double *q,
+                const AtomicSpecie *spc);
+
+} potential_function;
+
+/*******************************************************/
+
+#endif
+
+
+
+
+
+
+
+
+
 
 
 
