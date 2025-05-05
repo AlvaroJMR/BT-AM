@@ -46,7 +46,7 @@ extern double element_mass[112];
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i,
+KOKKOS_INLINE_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i,
   const PetscScalar_Matrix_Default  &mean_q,
   const PetscScalar_Vector_Default &xi,
   const AtomSpecie_Default &specie,
@@ -75,10 +75,10 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
   //! mean value of the position at site i
   for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
     //! @brief Get atomistic information of site j
+
     unsigned int site_j1 = mech_neighs_i(idx_j1);
     AtomicSpecie spc_j1 = specie(site_j1);
     double xi_j1 = xi(site_j1);
-
     auto mean_q_j1 = extractRowBlock(mean_q, site_j1, 0, 3);
 
     //! If the site is empty, skip from the evaluation
@@ -289,7 +289,7 @@ double evaluate_V_i_adp_MgHx(unsigned int site_i,                 //!
   return V_i;
 }
 
-double evaluate_V_i_adp_MgHx_Kokkos(unsigned int site_i,                 //!
+KOKKOS_FUNCTION double evaluate_V_i_adp_MgHx_Kokkos(unsigned int site_i,                 //!
   const PetscScalar_Matrix_Default  &mean_q,
   const PetscScalar_Vector_Default &xi,
   const PetscScalar_Vector_Default& rho,
@@ -379,7 +379,7 @@ V_quadrupole_ij1j2_adp_MgHx_constructor();
 
 //! Compute meanfield dipole angular term
 double V_dip_ij1j2 = 0.0;
-function_V_dipole_ij1j2.FK(&V_dip_ij1j2, xi_ij1.data(), mean_q_ij1.data(), spc_ij1j2,
+function_V_dipole_ij1j2.FK(&V_dip_ij1j2, xi_ij1.data(), mean_q_ij1.data(), spc_ij1,
 adp_Device_Default);
 V_dip_i += factor_j1j2 * V_dip_ij1j2;
 
@@ -387,7 +387,7 @@ V_dip_i += factor_j1j2 * V_dip_ij1j2;
 double V_quad_ij1j2 = 0.0;
 
 function_V_quadrupole_ij1j2.FK(&V_quad_ij1j2, xi_ij1.data(),
-         mean_q_ij1.data(), spc_ij1j2, adp_Device_Default);
+         mean_q_ij1.data(), spc_ij1, adp_Device_Default);
 V_quad_i += factor_j1j2 * V_quad_ij1j2;
 }
 }
@@ -488,12 +488,17 @@ destroy_gaussian_measure(&measure_ij);
 return mf_rho_i;
 }
 
-double evaluate_mf_rho_i_adp_MgHx_Kokkos(unsigned int site_i,            //!
-  const Eigen::MatrixXd& mean_q,  //!
-  const Eigen::VectorXd& stdv_q,  //!
-  const Eigen::VectorXd& xi,      //!
-  const AtomicSpecie* specie,     //!
-  const AtomTopology atom_topology_i) {
+
+
+KOKKOS_FUNCTION double evaluate_mf_rho_i_adp_MgHx_Kokkos(unsigned int site_i,                 //!
+  const PetscScalar_Matrix_Default  &mean_q,
+  const PetscScalar_Vector_Default &stdv_q,
+  const PetscScalar_Vector_Default &xi,
+  const AtomSpecie_Default &specie,
+  const AtomTopologyKokkos atom_topology_i,
+  const View_Double_Vector_Device mean_q_ij1,
+  const AdpPotencial_Device adp_Device_Default
+  ) {
 
 //! Define Integration rule
 void (*meanfield_integral)(double* integral_f, potential_function function,
@@ -511,13 +516,13 @@ double mf_rho_i = 0.0;  //! Meanfield Energy density term
 
 //! @brief Get topologic information of site i
 unsigned int numneigh_site_i = atom_topology_i.numneigh;
-const PetscInt* mech_neighs_i = atom_topology_i.mech_neighs_ptr;
+const PetscInt_Vector_Default mech_neighs_i = atom_topology_i.mech_neighs_ptr;
 
 //! @brief Get atomistic information of site i
-AtomicSpecie spc_i = specie[site_i];
+AtomicSpecie spc_i = specie(site_i);
 double xi_i = xi(site_i);
 double stdv_q_i = stdv_q(site_i);
-Eigen::Vector3d mean_q_i = mean_q.block<1, 3>(site_i, 0);
+auto mean_q_i = extractRowBlock(mean_q, site_i, 0, 3);
 
 //! If the site is empty, skip from the evaluation
 if (xi_i < min_occupancy) {
@@ -528,23 +533,21 @@ for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
 
 //! @brief Get atomistic information of site j
 unsigned int site_j1 = mech_neighs_i[idx_j1];
-AtomicSpecie spc_j1 = specie[site_j1];
+AtomicSpecie spc_j1 = specie(site_j1);
 double xi_j1 = xi(site_j1);
 double stdv_q_j1 = stdv_q(site_j1);
-Eigen::Vector3d mean_q_j1 = mean_q.block<1, 3>(site_j1, 0);
-
+auto mean_q_j1 = extractRowBlock(mean_q, site_j1, 0, 3);
 //! If the site is empty, skip from the evaluation
 if (xi_j1 < min_occupancy) {
 continue;
 }
 
 //! @brief Fill data for the measure
-Eigen::VectorXd mean_q_ij1(6);
-mean_q_ij1 << mean_q_i, mean_q_j1;
-Eigen::VectorXd stdv_q_ij1(2);
-stdv_q_ij1 << stdv_q_i, stdv_q_j1;
-Eigen::VectorXd xi_ij1(2);
-xi_ij1 << xi_i, xi_j1;
+
+concatenateVectors(mean_q_i, mean_q_j1, mean_q_ij1);
+std::array<double, 2>  xi_ij1 = std::array<double, 2> {xi_i, xi_j1};
+std::array<unsigned int, 2>  sites_ij1 = std::array<unsigned int, 2> {site_i, site_j1};
+double stdv_q_ij1[2] = {stdv_q_i, stdv_q_j1};
 AtomicSpecie spc_ij1[2] = {spc_i, spc_j1};
 
 //! @brief Create dof table for i-j par
@@ -552,7 +555,7 @@ int dof_table_ij[4] = {1, 0, 0, 1};
 
 //! @brief Create measure/functions
 gaussian_measure_ctx measure_ij =
-fill_out_gaussian_measure(mean_q_ij1.data(), stdv_q_ij1.data(),
+fill_out_gaussian_measure(mean_q_ij1.data(), stdv_q_ij1,
   xi_ij1.data(), spc_ij1, dof_table_ij, 2);
 
 potential_function rho_ij = rho_ij_adp_MgHx_constructor();
@@ -757,15 +760,19 @@ double S0_i = -log_Z0_i + beta_i * H0_i - gamma_xi_i;
 return S0_i;
 }
 
-double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,                 //!
-  const Eigen::MatrixXd& mean_q,       //!
-  const Eigen::VectorXd& stdv_q,       //!
-  const Eigen::VectorXd& xi,           //!
-  const Eigen::VectorXd& mf_rho,       //!
-  const Eigen::VectorXd& beta,         //!
-  const Eigen::VectorXd& gamma,        //!
-  const AtomicSpecie* specie,          //!
-  const AtomTopology atom_topology_i)  //!
+
+KOKKOS_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i, 
+  const PetscScalar_Matrix_Default  &mean_q,
+  const PetscScalar_Vector_Default &stdv_q,
+  const PetscScalar_Vector_Default &xi,
+  const PetscScalar_Vector_Default &mf_rho,       //!
+  const PetscScalar_Vector_Default &beta,         //!
+  const PetscScalar_Vector_Default &gamma,        //!
+  const AtomSpecie_Default &specie,
+  const AtomTopologyKokkos atom_topology_i,
+  const View_Double_Vector_Device mean_q_ij1,
+  const AdpPotencial_Device adp_Device_Default,
+  const View_Double_Vector_Device element_mass)  //!
 {
 
 unsigned int dim = NumberDimensions;
@@ -791,16 +798,16 @@ double V0_i = 0.0;        //! Total potential
 
 //! @brief Get topologic information of site i
 unsigned int numneigh_site_i = atom_topology_i.numneigh;
-const PetscInt* mech_neighs_i = atom_topology_i.mech_neighs_ptr;
+const PetscInt_Vector_Default mech_neighs_i = atom_topology_i.mech_neighs_ptr;
 
 //! @brief Get atomistic information of site i
-Eigen::Vector3d mean_q_i = mean_q.block<1, 3>(site_i, 0);
+auto mean_q_i = extractRowBlock(mean_q, site_i, 0, 3);
 double stdv_q_i = stdv_q(site_i);
 double xi_i = xi(site_i);
 double beta_i = beta(site_i);
 double gamma_i = gamma(site_i);
-AtomicSpecie spc_i = specie[site_i];
-double m_i = unit_change_uma * xi_i * element_mass[spc_i];
+AtomicSpecie spc_i = specie(site_i);
+double m_i = unit_change_uma * xi_i * element_mass(spc_i);
 
 //! If the site is empty, skip from the evaluation
 if (xi_i < min_occupancy) {
@@ -810,11 +817,11 @@ return 0.0;
 for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
 
 //! @brief Get atomistic information of site j
-unsigned int site_j1 = mech_neighs_i[idx_j1];
-AtomicSpecie spc_j1 = specie[site_j1];
+unsigned int site_j1 = mech_neighs_i(idx_j1);
+AtomicSpecie spc_j1 = specie(site_j1);
 double xi_j1 = xi(site_j1);
 double stdv_q_j1 = stdv_q(site_j1);
-Eigen::Vector3d mean_q_j1 = mean_q.block<1, 3>(site_j1, 0);
+auto mean_q_j1 = extractRowBlock(mean_q, site_j1, 0, 3);
 
 //! If the site is empty, skip from the evaluation
 if ((spc_j1 == H) && (xi_j1 < min_occupancy)) {
@@ -822,20 +829,18 @@ continue;
 }
 
 //! @brief Fill data for the measure
-Eigen::VectorXd mean_q_ij1(6);
-mean_q_ij1 << mean_q_i, mean_q_j1;
-Eigen::VectorXd stdv_q_ij1(2);
-stdv_q_ij1 << stdv_q_i, stdv_q_j1;
-Eigen::VectorXd xi_ij1(2);
-xi_ij1 << xi_i, xi_j1;
+concatenateVectors(mean_q_i, mean_q_j1, mean_q_ij1);
+std::array<double, 2>  xi_ij1 = std::array<double, 2> {xi_i, xi_j1};
+double stdv_q_ij1[2] = {stdv_q_i, stdv_q_j1};
 AtomicSpecie spc_ij1[2] = {spc_i, spc_j1};
+
 
 //! @brief Create dof table for i-j par
 int dof_table_ij[4] = {1, 0, 0, 1};
 
 //! @brief Create measure/functions
 gaussian_measure_ctx measure_ij =
-fill_out_gaussian_measure(mean_q_ij1.data(), stdv_q_ij1.data(),
+fill_out_gaussian_measure(mean_q_ij1.data(), stdv_q_ij1,
       xi_ij1.data(), spc_ij1, dof_table_ij, 2);
 
 potential_function V_pair_ij = V_pair_ij_adp_MgHx_constructor();
@@ -853,11 +858,11 @@ destroy_gaussian_measure(&measure_ij);
 for (unsigned int idx_j2 = idx_j1; idx_j2 < numneigh_site_i; idx_j2++) {
 
 //! @brief Compute atomistic information of site j2
-unsigned int site_j2 = mech_neighs_i[idx_j2];
-AtomicSpecie spc_j2 = specie[site_j2];
+unsigned int site_j2 = mech_neighs_i(idx_j2);
+AtomicSpecie spc_j2 = specie(site_j2);
 double xi_j2 = xi(site_j2);
 double stdv_q_j2 = stdv_q(site_j2);
-Eigen::Vector3d mean_q_j2 = mean_q.block<1, 3>(site_j2, 0);
+auto mean_q_j2 = extractRowBlock(mean_q, site_j2, 0, 3);
 
 //! If the site is empty, skip from the evaluation
 if (xi_j2 < min_occupancy) {
@@ -874,13 +879,10 @@ dof_table_ij1j2[7] = 1;
 }
 
 //! @brief Fill data for the measure
-Eigen::VectorXd mean_q_ij1j2(9);
-mean_q_ij1j2 << mean_q_i, mean_q_j1, mean_q_j2;
-Eigen::VectorXd stdv_q_ij1j2(3);
-stdv_q_ij1j2 << stdv_q_i, stdv_q_j1, stdv_q_j2;
-Eigen::VectorXd xi_ij1j2(3);
-xi_ij1j2 << xi_i, xi_j1, xi_j2;
+auto mean_q_ij1j2 = concatenateToArray<Kokkos::View<double*>, 9>(mean_q_i, mean_q_j1, mean_q_j2);
+std::array<double, 3>  xi_ij1j2 = std::array<double, 3> {xi_i, xi_j1, xi_j2};
 AtomicSpecie spc_ij1j2[3] = {spc_i, spc_j1, spc_j2};
+double stdv_q_ij1j2[3] = {spc_i, spc_j1, spc_j2};
 
 //! @brief Factor to consider the simmetry of the opration a_ij*a_ik =
 //! a_ik*a_ij
@@ -888,7 +890,7 @@ double factor_j1j2 = (idx_j2 == idx_j1) ? 1.0 : 2.0;
 
 //! Create measure/functions
 gaussian_measure_ctx measure_ij1j2 = fill_out_gaussian_measure(
-mean_q_ij1j2.data(), stdv_q_ij1j2.data(), xi_ij1j2.data(), spc_ij1j2,
+mean_q_ij1j2.data(), stdv_q_ij1j2, xi_ij1j2.data(), spc_ij1j2,
 dof_table_ij1j2, 3);
 
 potential_function V_dipole_ij1j2 = V_dipole_ij1j2_adp_MgHx_constructor();
@@ -913,9 +915,9 @@ destroy_gaussian_measure(&measure_ij1j2);
 //! @brief Add the contribution of the embedded forces
 CubicSpline embed_ii;
 if (spc_i == Mg) {
-embed_ii = adp_MgMg.embed;
+embed_ii = adp_Device_Default(0).embed;
 } else if (spc_i == H) {
-embed_ii = adp_HH.embed;
+embed_ii = adp_Device_Default(1).embed;
 }
 double mf_F_i = cubic_spline(&embed_ii, mf_rho_i);
 V0_embed_i = xi_i * mf_F_i;

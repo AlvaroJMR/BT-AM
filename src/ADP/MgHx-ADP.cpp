@@ -1003,7 +1003,7 @@ pair_ij = adp_Device_Default(2).pair;
 //! Compute parameters
 for (unsigned int alpha = 0; alpha < dim; alpha++) {
 r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
-r2_ij += DSQR(r_ij[alpha]);
+r2_ij += dsqr(r_ij[alpha]);
 }
 double norm_r_ij = sqrt(r2_ij);
 
@@ -1433,8 +1433,8 @@ u_ij2 = adp_Device_Default(2).u;
 for (unsigned int alpha = 0; alpha < dim; alpha++) {
 r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
 r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
-r2_ij1 += DSQR(r_ij1[alpha]);
-r2_ij2 += DSQR(r_ij2[alpha]);
+r2_ij1 += dsqr(r_ij1[alpha]);
+r2_ij2 += dsqr(r_ij2[alpha]);
 r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
 }
 double norm_r_ij1 = sqrt(r2_ij1);
@@ -2016,28 +2016,28 @@ double r_ij2[3];
 //! Set cubic spline to evaluate the dipole interation curve
 CubicSpline w_ij1;
 if ((spc[i] == Mg) && (spc[j1] == Mg)) {
-w_ij1 = adp_MgMg.w;
+w_ij1 = adp_Device_Default(0).w;
 } else if ((spc[i] == H) && (spc[j1] == H)) {
-w_ij1 = adp_HH.w;
+w_ij1 = adp_Device_Default(1).w;
 } else {
-w_ij1 = adp_MgH.w;
+w_ij1 = adp_Device_Default(2).w;
 }
 
 CubicSpline w_ij2;
 if ((spc[i] == Mg) && (spc[j2] == Mg)) {
-w_ij2 = adp_MgMg.w;
+w_ij2 = adp_Device_Default(0).w;
 } else if ((spc[i] == H) && (spc[j2] == H)) {
-w_ij2 = adp_HH.w;
+w_ij2 = adp_Device_Default(1).w;
 } else {
-w_ij2 = adp_MgH.w;
+w_ij2 = adp_Device_Default(2).w;
 }
 
 //! Compute parameters
 for (unsigned int alpha = 0; alpha < dim; alpha++) {
 r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
 r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
-r2_ij1 += DSQR(r_ij1[alpha]);
-r2_ij2 += DSQR(r_ij2[alpha]);
+r2_ij1 += dsqr(r_ij1[alpha]);
+r2_ij2 += dsqr(r_ij2[alpha]);
 r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
 }
 double norm_r_ij1 = sqrt(r2_ij1);
@@ -2047,7 +2047,7 @@ double nn_w_ij1 = n[i] * n[j1] * cubic_spline(&w_ij1, norm_r_ij1);
 double nn_w_ij2 = n[i] * n[j2] * cubic_spline(&w_ij2, norm_r_ij2);
 
 *V_quadrupole_ij1_ij2 =
-(1.0 / 2.0) * nn_w_ij1 * nn_w_ij2 * DSQR(r_ij1__dot__r_ij2) -
+(1.0 / 2.0) * nn_w_ij1 * nn_w_ij2 * dsqr(r_ij1__dot__r_ij2) -
 (1.0 / 6.0) * nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2;
 }
 

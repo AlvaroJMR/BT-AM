@@ -33,7 +33,7 @@ extern adpPotential adp_MgMg;
 extern adpPotential adp_HH;
 extern adpPotential adp_MgH;
 
-
+extern double element_mass[112];
 
 extern char OutputFolder[MAXC];
 static char help[] = "Bachelor's thesis: Álvaro Montaño Rosa \n";
@@ -368,17 +368,125 @@ Kokkos::parallel_reduce(
     "EvaluatePotentialEnergy", 
     Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
     KOKKOS_LAMBDA(const PetscInt site_u, double& V_u) {
-      auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, n_sites_local, Kokkos::ALL());
+      auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
         V_u += evaluate_V_i_adp_MgHx_Kokkos(
             site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, mf_rho_Default, 
             atomSpecie_Kokkos_Default, atomTopologyKokkos_Kokkos_Default(site_u), adp_Device_Default, mean_q_ij1);
     },
     V_local_Kokkos);
 
+  std::cout << "Acabe potencial en Kokkos: " << V_local_Kokkos << std::endl;
+
+  PetscScalar* stdv_q_ptr;
+  PetscCall(DMSwarmGetField(Simulation.atomistic_data, "stdv-q", NULL, NULL,
+                            (void**)&stdv_q_ptr));
+  Eigen::Map<VectorType> stdv_q(stdv_q_ptr, n_sites_local_ghosted);
+  
+  Kokkos::Timer timer3;
+  #pragma omp parallel for schedule(runtime)
+  for (PetscInt site_u = 0; site_u < n_sites_local; site_u++) {
+
+    //! @brief Evaluate energy density at site u
+    mf_rho(site_u) = evaluate_mf_rho_i_adp_MgHx(
+        site_u, mean_q, stdv_q, xi, specie_ptr, atom_topology[site_u]);
+  }
+
+  std::cout << "Tiempo que ha tardado en las operaciones sin Kokkos: " << timer3.seconds() << " seconds" << std::endl;
+
+
+  PetscScalar_Vector_Host stdv_q_ptr_Kokkos_Host(stdv_q_ptr, static_cast<size_t>(n_sites_local_ghosted));
+  PetscScalar_Vector_Default stdv_q_ptr_Kokkos_Default("Device_mechanical_sites", static_cast<size_t>(n_sites_local_ghosted));
+  Kokkos::deep_copy(stdv_q_ptr_Kokkos_Default, stdv_q_ptr_Kokkos_Host);
+  
+  Kokkos::Timer timer4;
+  Kokkos::parallel_for("Active_mech_sites", Kokkos::RangePolicy<DefaultExecSpace, IndexType>(0, n_sites_local), KOKKOS_LAMBDA(PetscInt n_sites_local_u) {
+
+    auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, n_sites_local_u, Kokkos::ALL());
+
+    mf_rho_Default(n_sites_local_u) = evaluate_mf_rho_i_adp_MgHx_Kokkos(
+      n_sites_local_u, mean_q_Kokkos_Default, stdv_q_ptr_Kokkos_Default, xi_Kokkos_Default, atomSpecie_Kokkos_Default, atomTopologyKokkos_Kokkos_Default(n_sites_local_u), mean_q_ij1, adp_Device_Default);
+});
+
+std::cout << "Tiempo que ha tardado en las operaciones con Kokkos: " << timer4.seconds() << " seconds" << std::endl;
+
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Get the thermal Lagrange Multiplier (beta) vector
+    - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+PetscScalar* beta_ptr;
+PetscCall(DMSwarmGetField(Simulation.atomistic_data, "beta", NULL, NULL,
+                          (void**)&beta_ptr));
+Eigen::Map<VectorType> beta(beta_ptr, n_sites_local_ghosted);
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   Get the chemical Lagrange Multiplier (gamma) vector
+  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+PetscScalar* gamma_ptr;
+PetscCall(DMSwarmGetField(Simulation.atomistic_data, "gamma", NULL, NULL,
+                          (void**)&gamma_ptr));
+Eigen::Map<VectorType> gamma(gamma_ptr, n_sites_local_ghosted);
+
+  double L0_local = 0.0;
+
+#pragma omp parallel for reduction(+ : L0_local) schedule(runtime)
+  for (PetscInt site_u = 0; site_u < n_sites_local; site_u++) {
+
+    //! @brief Evaluate the free entropy at site u
+    double S0_u = evaluate_S0_i_adp_MgHx(
+        site_u, mean_q, stdv_q, xi, mf_rho, beta, gamma, specie_ptr,
+        atom_topology[site_u]);
+
+    //! @brief Update local contribution of the residual equation
+    L0_local += k_B * S0_u;
+  }
+
+  PetscScalar_Vector_Host beta_ptr_Kokkos_Host(stdv_q_ptr, static_cast<size_t>(n_sites_local_ghosted));
+  PetscScalar_Vector_Default beta_ptr_Kokkos_Default("beta_ptr_Device", static_cast<size_t>(n_sites_local_ghosted));
+  Kokkos::deep_copy(beta_ptr_Kokkos_Default, beta_ptr_Kokkos_Host);
+
+  PetscScalar_Vector_Host gamma_ptr_Kokkos_Host(stdv_q_ptr, static_cast<size_t>(n_sites_local_ghosted));
+  PetscScalar_Vector_Default gamma_ptr_Kokkos_Default("gamma_ptr_Device", static_cast<size_t>(n_sites_local_ghosted));
+  Kokkos::deep_copy(gamma_ptr_Kokkos_Default, gamma_ptr_Kokkos_Host);
+
+  View_Double_Vector_Host element_mass_Host("element_mass_Host", 112);
+  Kokkos::View<double*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> temp_element_mass(element_mass, 112);
+  View_Double_Vector_Device element_mass_Device("element_mass_Device", 112);
+  Kokkos::deep_copy(element_mass_Host, temp_element_mass);
+  Kokkos::deep_copy(element_mass_Device, element_mass_Host);
+
+  double L0_Local_Kokkos = 0.0;
+
+  Kokkos::parallel_reduce(
+      "EvaluateFreeEntropy", 
+      Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
+      KOKKOS_LAMBDA(const PetscInt site_u, double& local_entropy) {
+
+        auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
+
+          double S0_u = evaluate_S0_i_adp_MgHx_Kokkos(
+              site_u, mean_q_Kokkos_Default, stdv_q_ptr_Kokkos_Default, xi_Kokkos_Default, 
+              mf_rho_Default, beta_ptr_Kokkos_Default, gamma_ptr_Kokkos_Default, atomSpecie_Kokkos_Default, 
+              atomTopologyKokkos_Kokkos_Default(site_u), mean_q_ij1, adp_Device_Default, element_mass_Device);
+  
+          //! @brief Update local contribution of the residual equation
+          local_entropy += k_B * S0_u;
+      },
+      L0_Local_Kokkos);  
+
     //! Migrate ghost field (energy density)
     //    PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
     //                                       &idx_q_ptr[n_sites_local],
     //                                       mf_rho_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "beta", NULL, NULL,
+      (void**)&beta_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "gamma", NULL, NULL,
+      (void**)&gamma_ptr));
+
+    PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "stdv-q", NULL,
+                                  NULL, (void **)&stdv_q_ptr));
 
     PetscCall(DMSwarmRestoreField(Simulation.atomistic_data,
                                   DMSwarmPICField_coor, NULL, NULL,
