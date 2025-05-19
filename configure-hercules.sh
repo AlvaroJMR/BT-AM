@@ -20,7 +20,6 @@ module load Eigen/3.4.0-GCCcore-12.3.0
 module load PETSc/3.21.6-foss-2023a
 
 ## Export variables
-export SOLERA_DIR=$HOME/DMD
 export PKG_CONFIG_PATH=$PETSC_DIR/lib/pkgconfig
 
 C_COMPILER=mpicc
@@ -28,7 +27,7 @@ CXX_COMPILER=mpicxx
 MAKE=make
 
 ## If build does not exists, create it
-BUILD_DIR=${SOLERA_DIR}/"build"
+BUILD_DIR="build"
 if [ ! -d "$BUILD_DIR" ]; then
   mkdir ${BUILD_DIR}
 fi
