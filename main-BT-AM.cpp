@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
 
 
     // Initialize Kokkos
-    cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 1024*1024);
+    // cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 1024*1024);
     Kokkos::initialize(argc, argv);
     {
     // Initialize PETSc
