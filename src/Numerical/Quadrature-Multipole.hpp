@@ -50,4 +50,8 @@ void meanfield_integral_mp_dsq(int direction, double *integral_f_ds,
 void meanfield_integral_mp_dmq(int direction, double *integral_grad_f,
                                potential_function function, void *ctx_measure);
 
+template<typename Dispatcher>
+KOKKOS_FUNCTION void meanfield_integral_mp_Kokkos(double* integral_f,
+                           void* ctx_measure, SoADevice *soADevice, Dispatcher function);
+                           
 #endif // quadrature_hermite_mp_HPP

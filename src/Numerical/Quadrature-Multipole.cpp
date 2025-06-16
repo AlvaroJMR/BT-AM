@@ -14,6 +14,9 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "ADP/MgHx-ADP.hpp"
+#include "Utils/KokkosUtils.hpp" 
+
 
 using namespace std;
 
@@ -285,5 +288,83 @@ void meanfield_integral_mp_dmq(int direction, double* integral_grad_f,
   //! Free memory
   free(mean_q_ij_k);
 }
+
+/********************************************************************************/
+template<typename Dispatcher>
+KOKKOS_FUNCTION void meanfield_integral_mp_Kokkos(double* integral_f,
+                           void* ctx_measure, SoADevice *soADevice, Dispatcher function) {
+
+  *integral_f = 0.0;
+
+  unsigned int dim = NumberDimensions;
+
+  Kokkos::printf("meanfield_integral_mp_Kokkos");
+
+  //! Read integral context
+  // clang-format off
+  unsigned int num_sites = ((gaussian_measure_ctx*)ctx_measure)->num_sites;
+  unsigned int intergal_dim = ((gaussian_measure_ctx*)ctx_measure)->intergal_dim;
+  const int* dof_table = ((gaussian_measure_ctx*)ctx_measure)->dof_table;
+  double* mean_q_ij = ((gaussian_measure_ctx*)ctx_measure)->mean_q_ij;
+  double* sigma = ((gaussian_measure_ctx*)ctx_measure)->stddev_q_ij;
+  double* xi_ij = ((gaussian_measure_ctx*)ctx_measure)->xi_ij;
+  AtomicSpecie* spc = ((gaussian_measure_ctx*)ctx_measure)->spc;
+  // clang-format on
+
+  // rho_ij_adp_MgHx_dispatcher function { Functions_Enum::FK, &f_0, xi_ij, mean_q_ij1, spc, soADevice.data() };
+
+
+  //! 0 contribution
+  double c_0 = 1.0;
+  double f_0 = 0.0;
+
+  function.function_rho_ij_Enum = Functions_Enum::FK;
+  function.value = &f_0;
+  function.n = xi_ij;
+  function.q = mean_q_ij;
+  function.spc = spc;
+  function.soADevice = soADevice;
+  function();
+  
+
+  function.F();
+
+  *integral_f += c_0 * f_0;
+
+  //! 2 contribution
+  double hess_f_0[dim * dim];
+  for (unsigned int site_idx_i = 0; site_idx_i < num_sites; site_idx_i++) {
+
+    double c_2_idx_i = dsqr(sigma[site_idx_i]) / 2.0;
+
+    for (unsigned int site_idx_j = 0; site_idx_j < num_sites; site_idx_j++) {
+
+      int direction = site_idx_i * num_sites + site_idx_j;
+
+      if (dof_table[direction] == 1) {
+
+#ifdef NUMERICAL_DERIVATIVES
+        function.function_rho_ij_Enum = Functions_Enum::d2F_dq2_FD;
+        function.direction = direction;
+        function.value = hess_f_0;
+        function();
+        // function.d2F_dq2_FD(direction, hess_f_0, xi_ij, mean_q_ij, spc);
+#else
+        function.function_rho_ij_Enum = Functions_Enum::d2F_dq2;
+        function.direction = direction;
+        function.value = hess_f_0;
+        function();
+        // function.d2F_dq2(direction, hess_f_0, xi_ij, mean_q_ij, spc);
+#endif
+
+        for (unsigned int alpha = 0; alpha < dim; alpha++) {
+          *integral_f += c_2_idx_i * hess_f_0[alpha * dim + alpha];
+        }
+      }
+    }
+  }
+
+}
+
 
 /********************************************************************************/

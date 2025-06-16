@@ -79,7 +79,7 @@ void destroy_adp_MgHx(adpPotential *adp);
  \f]
  * @return potential_function
  */
-potential_function rho_ij_adp_MgHx_constructor();
+KOKKOS_FUNCTION potential_function rho_ij_adp_MgHx_constructor();
 
 /**
  * @brief Pair term contribution constructor
@@ -587,5 +587,186 @@ n_{j_2}\ w_{i,j_2}\right)\ 2 |r_{i,j_1}|^2\ \text{I}\bigg) \end{split} \f]
  * @return potential_function
  */
 potential_function V_quadrupole_ij1j2_adp_MgHx_constructor();
+
+KOKKOS_FUNCTION void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
+  const AtomicSpecie* spc, SoADevice *soADevice);
+
+KOKKOS_FUNCTION void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
+  const AtomicSpecie* spc, SoADevice *soADevice);  
+
+KOKKOS_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
+  const double* q, const AtomicSpecie* spc, SoADevice *soADevice);
+  
+KOKKOS_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
+  const double* q, const AtomicSpecie* spc, SoADevice *soADevice);
+  
+KOKKOS_FUNCTION void d2_rho_ij_dq2_FD_Kokkos(int direction, double* d2_rho_ij_dq,
+                             const double* n, const double* q,
+                             const AtomicSpecie* spc,
+                             SoADevice *soADevice);  
+
+KOKKOS_FUNCTION void d2_rho_ij_dq2_Kokkos(int direction, double* d2_rho_ij_dq, const double* n,
+                          const double* q, const AtomicSpecie* spc, SoADevice *soADevice);     
+                          
+KOKKOS_FUNCTION void d2V_pair_ij_dq2_FD_Kokkos(int direction, double* d2V_pair_ij_dq,
+                               const double* n, const double* q,
+                               const AtomicSpecie* spc,
+                                SoADevice *soADevice);
+KOKKOS_FUNCTION void d2V_pair_ij_dq2_Kokkos(int direction, double* d2V_pair_ij_dq,
+                            const double* n, const double* q,
+                            const AtomicSpecie* spc,
+                                SoADevice *soADevice);         
+
+KOKKOS_FUNCTION void dV2_quadrupole_ij1j2_dq2_FD_Kokkos(int direction,
+                                        double* d2V_quadrupole_ij1j2_dq,
+                                        const double* n, const double* q, const AtomicSpecie* spc, SoADevice *soADevice);
+
+KOKKOS_FUNCTION void dV2_dipole_ij1j2_dq2_FD_Kokkos(int direction, double* d2V_dipole_ij1j2_dq,
+                                    const double* n, const double* q,
+                                    const AtomicSpecie* spc, SoADevice *soADevice);
+
+KOKKOS_FUNCTION void dV2_dipole_ij1j2_dq2_Kokkos(int direction, double* d2V_dipole_ij1j2_dq,
+                                 const double* n, const double* q,
+                                 const AtomicSpecie* spc, SoADevice *soADevice);           
+                                 
+KOKKOS_FUNCTION void dV2_quadrupole_ij1j2_dq2_Kokkos(int direction,
+                                     double* d2V_quadrupole_ij1j2_dq,
+                                     const double* n, const double* q,
+                                     const AtomicSpecie* spc,
+                                     SoADevice *soADevice);                        
+  
+KOKKOS_FUNCTION void d_rho_ij_dq_kokkos(int direction, aux_Vector d_rho_ij_dq_view, const double* n,
+  const double* q, const AtomicSpecie* spc, const SoADevice *soADevice);
+  
+KOKKOS_FUNCTION void dV_pair_ij_dq_kokkos(int direction, aux_Vector dV_pair_ij_dq_view, const double* n,
+  const double* q, const AtomicSpecie* spc, const SoADevice *soADevice);  
+
+KOKKOS_FUNCTION void dV_dipole_ij1j2_dq_kokkos(int direction, double* dV_dipole_ij1j2_dq,
+  const double* n, const double* q,
+  const AtomicSpecie* spc, const SoADevice *soADevice); 
+  
+KOKKOS_FUNCTION void dV_quadrupole_ij1j2_dq_kokkos(int direction,
+  double* dV_quadrupole_ij1_ij2_dq,
+  const double* n, const double* q,
+  const AtomicSpecie* spc, const SoADevice* soaDevice);  
+
+enum class Functions_Enum : int { F = 0, FK = 1, FK2 = 2, d2F_dq2_FD = 3, d2F_dq2 = 4, dF_dq_k = 5 };
+
+struct rho_ij_adp_MgHx_dispatcher {
+  Functions_Enum functions_Enum;
+  double* value; 
+  const double* n;
+  const double* q;
+  const AtomicSpecie* spc; 
+  SoADevice *soADevice;
+  int direction;
+  aux_Vector vector;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()() const {
+    switch(functions_Enum) {
+      case Functions_Enum::FK:
+        rho_ij_kokkos(value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::d2F_dq2_FD:
+        d2_rho_ij_dq2_FD_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::d2F_dq2:
+        d2_rho_ij_dq2_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::dF_dq_k:
+        d_rho_ij_dq_kokkos(direction, vector, n, q, spc, soADevice);
+        break;                      
+    }
+  }
+};
+
+struct V_pair_ij_adp_MgHx_dispatcher {
+  Functions_Enum functions_Enum;
+  double* value; 
+  const double* n;
+  const double* q;
+  const AtomicSpecie* spc; 
+  SoADevice *soADevice;
+  int direction;
+  aux_Vector vector;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()() const {
+    switch(functions_Enum) {
+      case Functions_Enum::FK:
+        V_pair_ij_kokkos(value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::d2F_dq2_FD:
+        d2V_pair_ij_dq2_FD_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::d2F_dq2:
+        d2V_pair_ij_dq2_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::dF_dq_k:
+        dV_pair_ij_dq_kokkos(direction, vector, n, q, spc, soADevice);
+        break;                            
+    }
+  }
+};
+
+struct V_dipole_ij1j2_dispatcher {
+  Functions_Enum functions_Enum;
+  double* value; 
+  const double* n;
+  const double* q;
+  const AtomicSpecie* spc; 
+  SoADevice *soADevice;
+  int direction;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()() const {
+    switch(functions_Enum) {
+      case Functions_Enum::FK:
+          V_dipole_ij1j2_kokkos(value, n, q, spc, soADevice);
+        break;
+        case Functions_Enum::d2F_dq2_FD:
+          dV2_dipole_ij1j2_dq2_FD_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+        case Functions_Enum::d2F_dq2:
+          dV2_dipole_ij1j2_dq2_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+        case Functions_Enum::dF_dq_k:
+          dV_dipole_ij1j2_dq_kokkos(direction, value, n, q, spc, soADevice);
+        break;            
+    }
+  }
+};
+
+struct V_quadrupole_ij1j2_dispatcher {
+  Functions_Enum functions_Enum;
+  double* value; 
+  const double* n;
+  const double* q;
+  const AtomicSpecie* spc; 
+  SoADevice *soADevice;
+  int direction;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()() const {
+    switch(functions_Enum) {
+      case Functions_Enum::FK:
+        V_quadrupole_ij1j2_kokkos(value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::d2F_dq2_FD:
+        dV2_quadrupole_ij1j2_dq2_FD_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::d2F_dq2:
+        dV2_quadrupole_ij1j2_dq2_Kokkos(direction, value, n, q, spc, soADevice);
+        break;
+      case Functions_Enum::dF_dq_k:
+        dV_quadrupole_ij1j2_dq_kokkos(direction, value, n, q, spc, soADevice);
+        break;                        
+    }
+  }
+};
+
+
+
 
 #endif

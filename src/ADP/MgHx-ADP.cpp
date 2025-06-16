@@ -57,17 +57,7 @@ static void rho_ij(double* rho_ij, const double* n_ij, const double* q_ij,
  * @param n_ij Occupancy of sites i and j
  * @param q_ij Coordinates of sites i and j
  */
-KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default);
 
-KOKKOS_FUNCTION static void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default);
-
-KOKKOS_FUNCTION static void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
-  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default); 
-
-KOKKOS_FUNCTION static void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
-  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default);  
 /**
  * @brief Function to compute the gradient of the energy density between sites i
  * and j. (ANALYTICAL)
@@ -462,7 +452,7 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
 
     init_spline(&adp->rho, adp->n_rho, dr_rho);
 
-    #if defined(KOKKOS_ENABLE_CUDA)
+    #if defined(USE_KOKKOS)
 
     read_spline(f_adp, adp->n_rho, adp->rho );
 
@@ -477,7 +467,7 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
     error = fscanf(f_adp, "%d %lf \n", &adp->n_embed, &drho_embed);
     init_spline(&adp->embed, adp->n_embed, drho_embed);
 
-    #if defined(KOKKOS_ENABLE_CUDA)
+    #if defined(USE_KOKKOS)
 
     read_spline(f_adp, adp->n_embed, adp->embed );
     
@@ -501,7 +491,7 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
   error = fscanf(f_adp, "%d %lf \n", &adp->n_pair, &dr_pair);
   init_spline(&adp->pair, adp->n_pair, dr_pair);
 
-  #if defined(KOKKOS_ENABLE_CUDA)
+  #if defined(USE_KOKKOS)
 
   read_spline(f_adp, adp->n_pair, adp->pair );
   
@@ -517,7 +507,7 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
   error = fscanf(f_adp, "%d %lf \n", &adp->n_u, &dr_u);
   init_spline(&adp->u, adp->n_u, dr_u);
 
-  #if defined(KOKKOS_ENABLE_CUDA)
+  #if defined(USE_KOKKOS)
 
   read_spline(f_adp, adp->n_u, adp->u );
   
@@ -533,7 +523,7 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
   error = fscanf(f_adp, "%d %lf \n", &adp->n_w, &dr_w);
   init_spline(&adp->w, adp->n_w, dr_w);
 
-  #if defined(KOKKOS_ENABLE_CUDA)
+  #if defined(USE_KOKKOS)
 
   read_spline(f_adp, adp->n_w, adp->w );
   
@@ -552,12 +542,13 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
 
 /********************************************************************************/
 
-potential_function rho_ij_adp_MgHx_constructor() {
+KOKKOS_FUNCTION potential_function rho_ij_adp_MgHx_constructor() {
   potential_function rho_ij_adp_MgHx;
   rho_ij_adp_MgHx.F = rho_ij;
-  rho_ij_adp_MgHx.FK = rho_ij_kokkos;
+  rho_ij_adp_MgHx.FK2 = rho_ij_kokkos;
 
   rho_ij_adp_MgHx.dF_dq = d_rho_ij_dq;
+//  rho_ij_adp_MgHx.dF_dq_k = d_rho_ij_dq_kokkos;
   rho_ij_adp_MgHx.d2F_dq2 = d2_rho_ij_dq2;
 
   rho_ij_adp_MgHx.dF_dq_FD = d_rho_ij_dq_FD;
@@ -571,9 +562,10 @@ potential_function rho_ij_adp_MgHx_constructor() {
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
+KOKKOS_FUNCTION void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
+  const AtomicSpecie* spc, SoADevice *soADevice) {
 
+   
   unsigned int dim = NumberDimensions;
   unsigned int i = 0, j = 1;
   double r2_ij = 0.0;
@@ -585,9 +577,9 @@ KOKKOS_FUNCTION static void rho_ij_kokkos(double* rho_ij, const double* n, const
   //! Set cubic spline to evaluate the energy density
   CubicSpline rho_j;
   if (spc[j] == Mg) {
-    rho_j = adp_Device_Default(0).rho;
-  } else if (spc[1] == H) {
-    rho_j = adp_Device_Default(1).rho;
+    rho_j = getSpline(AdpType::MgMg, SplineType::rho, rho_j, soADevice);
+  } else if (spc[j] == H) {
+    rho_j = getSpline(AdpType::HH, SplineType::rho, rho_j, soADevice);
   }
 
   //! Compute parameters
@@ -659,6 +651,9 @@ static void d_rho_ij_dq(int direction, double* d_rho_ij_dq, const double* n,
     r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
     r2_ij += DSQR(r_ij[alpha]);
   }
+  if(r2_ij == 0.0){
+    return;
+  }
   double norm_r_ij = sqrt(r2_ij);
   double norm_r_ij_m1 = 1.0 / norm_r_ij;
 
@@ -677,6 +672,61 @@ static void d_rho_ij_dq(int direction, double* d_rho_ij_dq, const double* n,
       d_rho_ij_dq[alpha] = -n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
     }
   }
+}
+
+/********************************************************************************/
+
+KOKKOS_FUNCTION void d_rho_ij_dq_kokkos(int direction, aux_Vector d_rho_ij_dq_view, const double* n,
+  const double* q, const AtomicSpecie* spc, const SoADevice *soADevice) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j = 1;
+double r2_ij = 0.0;
+double r_ij[3];
+
+//! Set d_rho_ij_dq to zero
+for (unsigned int dof = 0; dof < 3; dof++) {
+d_rho_ij_dq_view(dof) = 0.0;
+}
+
+//! Set cubic spline to evaluate the energy density
+CubicSpline rho_j;
+if (spc[j] == Mg) {
+  rho_j = getSpline(AdpType::MgMg, SplineType::rho, rho_j, soADevice);
+} else if (spc[j] == H) {
+  rho_j = getSpline(AdpType::HH, SplineType::rho, rho_j, soADevice);
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+r2_ij += dsqr(r_ij[alpha]);
+}
+
+
+if(r2_ij == 0.0){
+  return;
+}
+
+double norm_r_ij = sqrt(r2_ij);
+double norm_r_ij_m1 = 1.0 / norm_r_ij;
+
+double n_d_rho_ij = n[j] * d_cubic_spline(&rho_j, norm_r_ij);
+
+
+//! Direction i
+if (direction == 0) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+d_rho_ij_dq_view(alpha) = n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
+}
+}
+
+//! Direction j
+if (direction == 1) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+d_rho_ij_dq_view(alpha) = -n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
+}
+}
 }
 
 /********************************************************************************/
@@ -812,6 +862,78 @@ static void d2_rho_ij_dq2(int direction, double* d2_rho_ij_dq, const double* n,
 
 /********************************************************************************/
 
+KOKKOS_FUNCTION void d2_rho_ij_dq2_Kokkos(int direction, double* d2_rho_ij_dq, const double* n,
+                          const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
+
+  unsigned int dim = NumberDimensions;
+  unsigned int i = 0, j = 1;
+  double r2_ij = 0.0;
+  double r_ij[3];
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2_rho_ij_dq[dof] = 0.0;
+  }
+
+  //! Set cubic spline to evaluate the energy density
+  CubicSpline rho_j;
+  if (spc[j] == Mg) {
+    getSpline(AdpType::MgMg, SplineType::rho, rho_j, soADevice);
+  } else if (spc[j] == H) {
+    getSpline(AdpType::HH, SplineType::rho, rho_j, soADevice);
+  }
+
+  //! Compute parameters
+  for (unsigned int alpha = 0; alpha < dim; alpha++) {
+    r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+    r2_ij += dsqr(r_ij[alpha]);
+  }
+  double r2_ij_m1 = 1.0 / r2_ij;
+  double norm_r_ij = sqrt(r2_ij);
+
+  double hessian_r_ij[NumberDimensions * NumberDimensions] = {
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  compute_hessian_norm_r(hessian_r_ij, r_ij, norm_r_ij);
+
+  double n_d_rho_ij = n[j] * d_cubic_spline(&rho_j, norm_r_ij);
+  double n_dd_rho_ij = n[j] * d2_cubic_spline(&rho_j, norm_r_ij);
+
+  // ii direction
+  if (direction == 0) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2_rho_ij_dq[alpha * dim + beta] =
+            n_dd_rho_ij * r2_ij_m1 * (r_ij[alpha] * r_ij[beta]) +
+            n_d_rho_ij * hessian_r_ij[alpha * dim + beta];
+      }
+    }
+  }
+
+  // ij or ji direction
+  if ((direction == 1) || (direction == 2)) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2_rho_ij_dq[alpha * dim + beta] =
+            -n_dd_rho_ij * r2_ij_m1 * (r_ij[alpha] * r_ij[beta]) -
+            n_d_rho_ij * hessian_r_ij[alpha * dim + beta];
+      }
+    }
+  }
+
+  // jj direction
+  if (direction == 3) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2_rho_ij_dq[alpha * dim + beta] =
+            n_dd_rho_ij * r2_ij_m1 * (r_ij[alpha] * r_ij[beta]) +
+            n_d_rho_ij * hessian_r_ij[alpha * dim + beta];
+      }
+    }
+  }
+}
+
+/********************************************************************************/
+
 static void d2_rho_ij_dq2_FD(int direction, double* d2_rho_ij_dq,
                              const double* n, const double* q,
                              const AtomicSpecie* spc) {
@@ -891,6 +1013,82 @@ static void d2_rho_ij_dq2_FD(int direction, double* d2_rho_ij_dq,
 
 /********************************************************************************/
 
+KOKKOS_FUNCTION void d2_rho_ij_dq2_FD_Kokkos(int direction, double* d2_rho_ij_dq,
+                             const double* n, const double* q,
+                             const AtomicSpecie* spc,
+                             SoADevice *soADevice) {
+
+  constexpr unsigned int dim = NumberDimensions;
+  constexpr unsigned int num_sites = 2;
+  double dr = 0.0001;  // *rc;
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2_rho_ij_dq[dof] = 0.0;
+  }
+
+  //! Evaluate function in the central value
+  double f_0 = 0.0;
+  rho_ij_kokkos(&f_0, n, q, spc, soADevice);
+
+  //! Allocate memory
+
+  double q_pp[dim * num_sites];
+  double q_p[dim * num_sites];
+  double q_m[dim * num_sites];
+  double q_mm[dim * num_sites];
+
+  //
+  for (unsigned int alpha = 0; alpha < dim; alpha++) {
+
+    unsigned int d_dof_i = direction / (1 + num_sites) * dim + alpha;
+
+    //! Compute the positions
+    for (unsigned int site_idx = 0; site_idx < num_sites; site_idx++) {
+
+      for (unsigned int beta = 0; beta < dim; beta++) {
+
+        unsigned int dof_idx_aux = site_idx * dim + beta;
+
+        bool D_alpha = (dof_idx_aux == d_dof_i) ? true : false;
+
+        q_pp[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr * 2;
+
+        q_p[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr;
+
+        q_m[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr;
+
+        q_mm[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr * 2;
+      }
+    }
+
+    //! Evaluate functions
+
+    // f(x + 2*Dx,y)
+    double f_pp = 0.0;
+    rho_ij_kokkos(&f_pp, n, q_pp, spc, soADevice);
+
+    // f(x + Dx,y)
+    double f_p = 0.0;
+    rho_ij_kokkos(&f_p, n, q_p, spc, soADevice);
+
+    // f(x - Dx,y)
+    double f_m = 0.0;
+    rho_ij_kokkos(&f_m, n, q_m, spc, soADevice);
+
+    // f(x - 2*Dx,y)
+    double f_mm = 0.0;
+    rho_ij_kokkos(&f_mm, n, q_mm, spc, soADevice);
+
+    d2_rho_ij_dq[alpha * dim + alpha] =
+        (-f_pp + 16.0 * f_p - 30.0 * f_0 + 16.0 * f_m - f_mm) /
+        (12.0 * dr * dr);
+  }
+
+}
+
+/********************************************************************************/
+
 static void d_rho_ij_dn(int direction, double* d_rho_ij_dn, const double* n,
                         const double* q, const AtomicSpecie* spc) {
 
@@ -928,10 +1126,11 @@ potential_function V_pair_ij_adp_MgHx_constructor() {
   potential_function V_pair_ij_adp_MgHx;
 
   V_pair_ij_adp_MgHx.F = V_pair_ij;
-  V_pair_ij_adp_MgHx.FK = V_pair_ij_kokkos;
+  //V_pair_ij_adp_MgHx.FK = V_pair_ij_kokkos;
 
   //! Analytical derivatives dV_pair_ij_dq and d2V_pair_ij_dq2
   V_pair_ij_adp_MgHx.dF_dq = dV_pair_ij_dq;
+//  V_pair_ij_adp_MgHx.dF_dq_k = dV_pair_ij_dq_kokkos;
   V_pair_ij_adp_MgHx.d2F_dq2 = d2V_pair_ij_dq2;
 
   //! Numerical derivatives of dV_pair_ij_dq and d2V_pair_ij_dq2
@@ -979,8 +1178,8 @@ static void V_pair_ij(double* V_pair_ij, const double* n, const double* q,
   *V_pair_ij = 0.5 * nn_phi_ij1;
 }
 
-KOKKOS_FUNCTION static void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
+KOKKOS_FUNCTION void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
+  const AtomicSpecie* spc, SoADevice *soADevice) {
 
 unsigned int dim = NumberDimensions;
 unsigned int i = 0, j = 1;
@@ -993,11 +1192,14 @@ double r_ij[3];
 //! Set cubic spline to evaluate the pair interation curve
 CubicSpline pair_ij;
 if ((spc[i] == Mg) && (spc[j] == Mg)) {
-pair_ij = adp_Device_Default(0).pair;
+pair_ij = getSpline(AdpType::MgMg, SplineType::pair, pair_ij, soADevice);
+
 } else if ((spc[i] == H) && (spc[j] == H)) {
-pair_ij = adp_Device_Default(1).pair;
+pair_ij = getSpline(AdpType::HH, SplineType::pair, pair_ij, soADevice);
+
 } else {
-pair_ij = adp_Device_Default(2).pair;
+pair_ij = getSpline(AdpType::MgH, SplineType::pair, pair_ij, soADevice);
+
 }
 
 //! Compute parameters
@@ -1042,6 +1244,9 @@ static void dV_pair_ij_dq(int direction, double* dV_pair_ij_dq, const double* n,
     r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
     r2_ij += DSQR(r_ij[alpha]);
   }
+  if(r2_ij == 0.0){
+    return;
+  }
   double norm_r_ij = sqrt(r2_ij);
   double norm_r_ij_m1 = 1.0 / norm_r_ij;
   double nn_d_pair_ij = n[i] * n[j] * d_cubic_spline(&pair_ij, norm_r_ij);
@@ -1059,6 +1264,60 @@ static void dV_pair_ij_dq(int direction, double* dV_pair_ij_dq, const double* n,
       dV_pair_ij_dq[alpha] = -0.5 * nn_d_pair_ij * norm_r_ij_m1 * r_ij[alpha];
     }
   }
+}
+
+/********************************************************************************/
+
+KOKKOS_FUNCTION void dV_pair_ij_dq_kokkos(int direction, aux_Vector dV_pair_ij_dq_view, const double* n,
+  const double* q, const AtomicSpecie* spc, const SoADevice *soADevice) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j = 1;
+double r2_ij = 0.0;
+double r_ij[3];
+
+//! Set to zero
+for (unsigned int dof = 0; dof < 3; dof++) {
+dV_pair_ij_dq_view(dof) = 0.0;
+}
+
+//! Set cubic spline to evaluate the pair interation curve
+CubicSpline pair_ij;
+if ((spc[i] == Mg) && (spc[j] == Mg)) {
+  pair_ij = getSpline(AdpType::MgMg, SplineType::pair, pair_ij, soADevice);
+} else if ((spc[i] == H) && (spc[j] == H)) {
+  pair_ij = getSpline(AdpType::HH, SplineType::pair, pair_ij, soADevice);
+} else {
+  pair_ij = getSpline(AdpType::MgH, SplineType::pair, pair_ij, soADevice);
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+r2_ij += dsqr(r_ij[alpha]);
+}
+
+if(r2_ij == 0.0){
+  return;
+}
+
+double norm_r_ij = sqrt(r2_ij);
+double norm_r_ij_m1 = 1.0 / norm_r_ij;
+double nn_d_pair_ij = n[i] * n[j] * d_cubic_spline(&pair_ij, norm_r_ij);
+
+//! Direction i
+if (direction == i) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_pair_ij_dq_view(alpha) = 0.5 * nn_d_pair_ij * norm_r_ij_m1 * r_ij[alpha];
+}
+}
+
+//! Direction j
+if (direction == j) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_pair_ij_dq_view(alpha) = -0.5 * nn_d_pair_ij * norm_r_ij_m1 * r_ij[alpha];
+}
+}
 }
 
 /********************************************************************************/
@@ -1201,6 +1460,87 @@ static void d2V_pair_ij_dq2(int direction, double* d2V_pair_ij_dq,
 
 /********************************************************************************/
 
+
+
+KOKKOS_FUNCTION void d2V_pair_ij_dq2_Kokkos(int direction, double* d2V_pair_ij_dq,
+                            const double* n, const double* q,
+                            const AtomicSpecie* spc,
+                            SoADevice *soADevice) {
+
+  unsigned int dim = NumberDimensions;
+  unsigned int i = 0, j = 1;
+  double r2_ij = 0.0;
+  double r_ij[3];
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2V_pair_ij_dq[dof] = 0.0;
+  }
+
+  //! Set cubic spline to evaluate the pair interation curve
+  CubicSpline pair_ij;
+  if ((spc[i] == Mg) && (spc[j] == Mg)) {
+    pair_ij = getSpline(AdpType::MgMg, SplineType::pair, pair_ij, soADevice);
+  } else if ((spc[i] == H) && (spc[j] == H)) {
+    pair_ij = getSpline(AdpType::HH, SplineType::pair, pair_ij, soADevice);
+  } else {
+    pair_ij = getSpline(AdpType::MgH, SplineType::pair, pair_ij, soADevice);
+  }
+
+  //! Compute parameters
+  for (unsigned int alpha = 0; alpha < dim; alpha++) {
+    r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+    r2_ij += dsqr(r_ij[alpha]);
+  }
+  double r2_ij_m1 = 1.0 / r2_ij;
+  double norm_r_ij = sqrt(r2_ij);
+
+  double hessian_r_ij[NumberDimensions * NumberDimensions] = {
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  compute_hessian_norm_r(hessian_r_ij, r_ij, norm_r_ij);
+
+  double nn_d_pair_ij = n[i] * n[j] * d_cubic_spline(&pair_ij, norm_r_ij);
+  double nn_dd_pair_ij = n[i] * n[j] * d2_cubic_spline(&pair_ij, norm_r_ij);
+
+  // ii direction
+  if (direction == 0) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_pair_ij_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+            (nn_dd_pair_ij * r2_ij_m1 * (r_ij[alpha] * r_ij[beta]) +
+             nn_d_pair_ij * hessian_r_ij[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // ij and ji directions
+  if ((direction == 1) || (direction == 2)) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_pair_ij_dq[alpha * dim + beta] =
+            -(1.0 / 2.0) *
+            (nn_dd_pair_ij * r2_ij_m1 * (r_ij[alpha] * r_ij[beta]) +
+             nn_d_pair_ij * hessian_r_ij[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // jj direction
+  if (direction == 3) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_pair_ij_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+            (nn_dd_pair_ij * r2_ij_m1 * (r_ij[alpha] * r_ij[beta]) +
+             nn_d_pair_ij * hessian_r_ij[alpha * dim + beta]);
+      }
+    }
+  }
+}
+
+/********************************************************************************/
+
 static void d2V_pair_ij_dq2_FD(int direction, double* d2V_pair_ij_dq,
                                const double* n, const double* q,
                                const AtomicSpecie* spc) {
@@ -1280,6 +1620,82 @@ static void d2V_pair_ij_dq2_FD(int direction, double* d2V_pair_ij_dq,
 
 /********************************************************************************/
 
+
+KOKKOS_FUNCTION void d2V_pair_ij_dq2_FD_Kokkos(int direction, double* d2V_pair_ij_dq,
+                               const double* n, const double* q,
+                               const AtomicSpecie* spc,
+                               SoADevice *soADevice) {
+
+  constexpr unsigned int dim = NumberDimensions;
+  constexpr unsigned int num_sites = 2;
+  double dr = 0.0001;  // *rc;
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2V_pair_ij_dq[dof] = 0.0;
+  }
+
+  //! Evaluate function in the central value
+  double f_0 = 0.0;
+  V_pair_ij(&f_0, n, q, spc);
+
+  //! Allocate memory
+  double q_pp[dim * num_sites];
+  double q_p[dim * num_sites];
+  double q_m[dim * num_sites];
+  double q_mm[dim * num_sites];
+
+  //
+  for (unsigned int alpha = 0; alpha < dim; alpha++) {
+
+    unsigned int d_dof_i = direction / (1 + num_sites) * dim + alpha;
+
+    //! Compute the positions
+    for (unsigned int site_idx = 0; site_idx < num_sites; site_idx++) {
+
+      for (unsigned int beta = 0; beta < dim; beta++) {
+
+        unsigned int dof_idx_aux = site_idx * dim + beta;
+
+        bool D_alpha = (dof_idx_aux == d_dof_i) ? true : false;
+
+        q_pp[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr * 2;
+
+        q_p[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr;
+
+        q_m[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr;
+
+        q_mm[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr * 2;
+      }
+    }
+
+    //! Evaluate functions
+
+    // f(x + 2*Dx,y)
+    double f_pp = 0.0;
+    V_pair_ij(&f_pp, n, q_pp, spc);
+
+    // f(x + Dx,y)
+    double f_p = 0.0;
+    V_pair_ij(&f_p, n, q_p, spc);
+
+    // f(x - Dx,y)
+    double f_m = 0.0;
+    V_pair_ij(&f_m, n, q_m, spc);
+
+    // f(x - 2*Dx,y)
+    double f_mm = 0.0;
+    V_pair_ij(&f_mm, n, q_mm, spc);
+
+    d2V_pair_ij_dq[alpha * dim + alpha] =
+        (-f_pp + 16.0 * f_p - 30.0 * f_0 + 16.0 * f_m - f_mm) /
+        (12.0 * dr * dr);
+  }
+
+}
+
+/********************************************************************************/
+
 static void dV_pair_ij_dn(int direction, double* dV_pair_ij_dn, const double* n,
                           const double* q, const AtomicSpecie* spc) {
 
@@ -1328,9 +1744,10 @@ potential_function V_dipole_ij1j2_adp_MgHx_constructor() {
   potential_function V_dipole_ij1j2_adp_MgHx;
 
   V_dipole_ij1j2_adp_MgHx.F = V_dipole_ij1j2;
-  V_dipole_ij1j2_adp_MgHx.FK = V_dipole_ij1j2_kokkos;
+  // V_dipole_ij1j2_adp_MgHx.FK = V_dipole_ij1j2_kokkos;
 
   V_dipole_ij1j2_adp_MgHx.dF_dq = dV_dipole_ij1j2_dq;
+//  V_dipole_ij1j2_adp_MgHx.dF_dq_k = dV_dipole_ij1j2_dq_kokkos;
   V_dipole_ij1j2_adp_MgHx.d2F_dq2 = dV2_dipole_ij1j2_dq2;
 
   V_dipole_ij1j2_adp_MgHx.dF_dq_FD = dV_dipole_ij1j2_dq_FD;
@@ -1391,13 +1808,26 @@ static void V_dipole_ij1j2(double* V_dipole_ij1j2, const double* n,
   double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
   double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
 
+  int m = static_cast<int>(norm_r_ij1 / u_ij1.dx);
+  m = min(m, u_ij1.n - 1);  // comprobation to know if m>m_max; m_max=n-1
+  double p = m * u_ij1.dx;         // x_m=m*dx
+  p = norm_r_ij1 - p;              // p=x-x_m=x-m*dx
+  p = min(p, u_ij1.dx);     // comprobation to know if p>dx
+
+
+
+  //Kokkos::printf(" Sin Kokkos:  m: %d r2_ij1 = %f r2_ij2 = %f u_ij1.dx = %f\n", m ,r2_ij1, r2_ij2, u_ij1.dx );
+
   *V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
+
+  // Kokkos::printf("Sin Kokkos dipolo = %f\n", *V_dipole_ij1j2);
+
 }
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION static void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
-  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
+KOKKOS_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
+  const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
 
 unsigned int dim = NumberDimensions;
 unsigned int i = 0, j1 = 1, j2 = 2;
@@ -1413,20 +1843,20 @@ double r_ij2[3];
 //! Set cubic spline to evaluate the dipole interation curve
 CubicSpline u_ij1;
 if ((spc[i] == Mg) && (spc[j1] == Mg)) {
-u_ij1 = adp_Device_Default(0).u;
+u_ij1 = getSpline(AdpType::MgMg, SplineType::u, u_ij1, soADevice);
 } else if ((spc[i] == H) && (spc[j1] == H)) {
-u_ij1 = adp_Device_Default(1).u;
+u_ij1 = getSpline(AdpType::HH, SplineType::u, u_ij1, soADevice);
 } else {
-u_ij1 = adp_Device_Default(2).u;
+u_ij1 = getSpline(AdpType::MgH, SplineType::u, u_ij1, soADevice);
 }
 
 CubicSpline u_ij2;
 if ((spc[i] == Mg) && (spc[j2] == Mg)) {
-u_ij2 = adp_Device_Default(0).u;
+u_ij2 = getSpline(AdpType::MgMg, SplineType::u, u_ij2, soADevice);
 } else if ((spc[i] == H) && (spc[j2] == H)) {
-u_ij2 = adp_Device_Default(1).u;
+u_ij2 = getSpline(AdpType::HH, SplineType::u, u_ij2, soADevice);
 } else {
-u_ij2 = adp_Device_Default(2).u;
+u_ij2 = getSpline(AdpType::MgH, SplineType::u, u_ij2, soADevice);
 }
 
 //! Compute parameters
@@ -1443,7 +1873,20 @@ double norm_r_ij2 = sqrt(r2_ij2);
 double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
 double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
 
+  int m = static_cast<int>(norm_r_ij1 / u_ij1.dx);
+  m = min(m, u_ij1.n - 1);  // comprobation to know if m>m_max; m_max=n-1
+  double p = m * u_ij1.dx;         // x_m=m*dx
+  p = norm_r_ij1 - p;              // p=x-x_m=x-m*dx
+  p = min(p, u_ij1.dx);     // comprobation to know if p>dx
+
+/* Kokkos::printf("kokkos SPLINE (m=%d): a = %f, b = %f, c = %f, d = %f\n",
+                m, u_ij1.a_d[m], u_ij1.b_d[m], u_ij1.c_d[m], u_ij1.d_d[m]); */
+                              
+// Kokkos::printf("Kokkos m: %d r2_ij1 = %f r2_ij2 = %f u_ij1.dx = %f\n", m ,r2_ij1, r2_ij2, u_ij1.dx );
+
 *V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
+
+  // Kokkos::printf("Kokkos dipolo = %f\n", *V_dipole_ij1j2);
 }
 /********************************************************************************/
 
@@ -1491,6 +1934,9 @@ static void dV_dipole_ij1j2_dq(int direction, double* dV_dipole_ij1j2_dq,
     r2_ij2 += DSQR(r_ij2[alpha]);
     r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
   }
+  if (r2_ij1 == 0.0 || r2_ij2 == 0.0) {
+    return;
+  }
   double norm_r_ij1 = sqrt(r2_ij1);
   double norm_r_ij1_m1 = 1.0 / norm_r_ij1;
   double norm_r_ij2 = sqrt(r2_ij2);
@@ -1533,6 +1979,102 @@ static void dV_dipole_ij1j2_dq(int direction, double* dV_dipole_ij1j2_dq,
                   nn_u_ij1 * nn_u_ij2 * r_ij1[alpha]);
     }
   }
+}
+
+/********************************************************************************/
+
+
+KOKKOS_FUNCTION void dV_dipole_ij1j2_dq_kokkos(int direction, double* dV_dipole_ij1j2_dq,
+  const double* n, const double* q,
+  const AtomicSpecie* spc, const SoADevice *soADevice) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j1 = 1, j2 = 2;
+double r2_ij1 = 0.0;
+double r2_ij2 = 0.0;
+double r_ij1__dot__r_ij2 = 0.0;
+double r_ij1[3];
+double r_ij2[3];
+
+//! Set to zero
+for (unsigned int dof = 0; dof < 3; dof++) {
+dV_dipole_ij1j2_dq[dof] = 0.0;
+}
+
+//! Set cubic spline to evaluate the dipole interation curve
+CubicSpline u_ij1;
+if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+  u_ij1 = getSpline(AdpType::MgMg, SplineType::u, u_ij1, soADevice);
+} else if ((spc[i] == H) && (spc[j1] == H)) {
+  u_ij1 = getSpline(AdpType::HH, SplineType::u, u_ij1, soADevice);
+} else {
+  u_ij1 = getSpline(AdpType::MgH, SplineType::u, u_ij1, soADevice);
+}
+
+CubicSpline u_ij2;
+if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+  u_ij2 = getSpline(AdpType::MgMg, SplineType::u, u_ij2, soADevice);
+} else if ((spc[i] == H) && (spc[j2] == H)) {
+  u_ij2 = getSpline(AdpType::HH, SplineType::u, u_ij2, soADevice);
+} else {
+  u_ij2 = getSpline(AdpType::MgH, SplineType::u, u_ij2, soADevice);
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+r2_ij1 += dsqr(r_ij1[alpha]);
+r2_ij2 += dsqr(r_ij2[alpha]);
+r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+}
+
+if (r2_ij1 == 0.0 || r2_ij2 == 0.0) {
+  return;
+}
+
+double norm_r_ij1 = sqrt(r2_ij1);
+double norm_r_ij1_m1 = 1.0 / norm_r_ij1;
+double norm_r_ij2 = sqrt(r2_ij2);
+double norm_r_ij2_m1 = 1.0 / norm_r_ij2;
+
+double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
+double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
+
+double nn_d_u_ij1 = n[i] * n[j1] * d_cubic_spline(&u_ij1, norm_r_ij1);
+double nn_d_u_ij2 = n[i] * n[j2] * d_cubic_spline(&u_ij2, norm_r_ij2);
+
+//! Direction i
+if (direction == 0) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_dipole_ij1j2_dq[alpha] =
+0.5 * (nn_d_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+r_ij1[alpha] +
+nn_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+r_ij2[alpha] +
+nn_u_ij1 * nn_u_ij2 * (r_ij1[alpha] + r_ij2[alpha]));
+}
+}
+
+//! Direction j1
+if (direction == 1) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_dipole_ij1j2_dq[alpha] =
+-0.5 * (nn_d_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+r_ij1[alpha] +
+nn_u_ij1 * nn_u_ij2 * r_ij2[alpha]);
+}
+}
+
+//! Direction j2
+if (direction == 2) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_dipole_ij1j2_dq[alpha] =
+-0.5 * (nn_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+r_ij2[alpha] +
+nn_u_ij1 * nn_u_ij2 * r_ij1[alpha]);
+}
+}
 }
 
 /********************************************************************************/
@@ -1767,6 +2309,177 @@ static void dV2_dipole_ij1j2_dq2(int direction, double* d2V_dipole_ij1j2_dq,
 
 /********************************************************************************/
 
+
+KOKKOS_FUNCTION void dV2_dipole_ij1j2_dq2_Kokkos(int direction, double* d2V_dipole_ij1j2_dq,
+                                 const double* n, const double* q,
+                                 const AtomicSpecie* spc, SoADevice *soADevice) {
+
+  unsigned int dim = NumberDimensions;
+  unsigned int i = 0, j1 = 1, j2 = 2;
+  double r2_ij1 = 0.0;
+  double r2_ij2 = 0.0;
+  double r_ij1__dot__r_ij2 = 0.0;
+  double r_ij1[3];
+  double r_ij2[3];
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2V_dipole_ij1j2_dq[dof] = 0.0;
+  }
+
+  //! Set cubic spline to evaluate the dipole interation curve
+  CubicSpline u_ij1;
+  if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+    u_ij1 = getSpline(AdpType::MgMg, SplineType::u, u_ij1, soADevice);
+  } else if ((spc[i] == H) && (spc[j1] == H)) {
+    u_ij1 = getSpline(AdpType::HH, SplineType::u, u_ij1, soADevice);
+  } else {
+    u_ij1 = getSpline(AdpType::MgH, SplineType::u, u_ij1, soADevice);
+  }
+
+  CubicSpline u_ij2;
+  if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+    u_ij2 = getSpline(AdpType::MgMg, SplineType::u, u_ij2, soADevice);
+  } else if ((spc[i] == H) && (spc[j2] == H)) {
+    u_ij2 = getSpline(AdpType::HH, SplineType::u, u_ij2, soADevice);
+  } else {
+    u_ij2 = getSpline(AdpType::MgH, SplineType::u, u_ij2, soADevice);
+  }
+
+  //! Compute parameters
+  for (unsigned int alpha = 0; alpha < dim; alpha++) {
+    r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+    r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+    r2_ij1 += dsqr(r_ij1[alpha]);
+    r2_ij2 += dsqr(r_ij2[alpha]);
+    r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+  }
+  double r2_ij1_m1 = 1.0 / r2_ij1;
+  double norm_r_ij1 = sqrt(r2_ij1);
+  double norm_r_ij1_m1 = 1.0 / norm_r_ij1;
+  double r2_ij2_m1 = 1.0 / r2_ij2;
+  double norm_r_ij2 = sqrt(r2_ij2);
+  double norm_r_ij2_m1 = 1.0 / norm_r_ij2;
+
+  double hessian_r_ij1[NumberDimensions * NumberDimensions] = {
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  compute_hessian_norm_r(hessian_r_ij1, r_ij1, norm_r_ij1);
+  double hessian_r_ij2[NumberDimensions * NumberDimensions] = {
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  compute_hessian_norm_r(hessian_r_ij2, r_ij2, norm_r_ij2);
+
+  double Identity[NumberDimensions * NumberDimensions] = {
+      1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+
+  double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
+  double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
+
+  double nn_d_u_ij1 = n[i] * n[j1] * d_cubic_spline(&u_ij1, norm_r_ij1);
+  double nn_d_u_ij2 = n[i] * n[j2] * d_cubic_spline(&u_ij2, norm_r_ij2);
+
+  double nn_dd_u_ij1 = n[i] * n[j1] * d2_cubic_spline(&u_ij1, norm_r_ij1);
+  double nn_dd_u_ij2 = n[i] * n[j2] * d2_cubic_spline(&u_ij2, norm_r_ij2);
+
+  // ii direction
+  if (direction == 0) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_dipole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+            (nn_dd_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2 * r2_ij1_m1 *
+                 (r_ij1[alpha] * r_ij1[beta]) +
+             nn_d_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                 norm_r_ij2_m1 * (r_ij1[alpha] * r_ij2[beta]) +
+             nn_d_u_ij1 * nn_u_ij2 * norm_r_ij1_m1 *
+                 (r_ij1[alpha] * r_ij2[beta] + r_ij1[alpha] * r_ij1[beta]) +
+             nn_d_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2 *
+                 hessian_r_ij1[alpha * dim + beta] +
+             nn_d_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                 norm_r_ij1_m1 * (r_ij2[alpha] * r_ij1[beta]) +
+             nn_u_ij1 * nn_dd_u_ij2 * r_ij1__dot__r_ij2 * r2_ij2_m1 *
+                 (r_ij2[alpha] * r_ij2[beta]) +
+             nn_u_ij1 * nn_d_u_ij2 * norm_r_ij2_m1 *
+                 (r_ij2[alpha] * r_ij1[beta] + r_ij2[alpha] * r_ij2[beta]) +
+             nn_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 *
+                 hessian_r_ij2[alpha * dim + beta] +
+             nn_d_u_ij1 * nn_u_ij2 * norm_r_ij1_m1 *
+                 (r_ij1[alpha] * r_ij1[beta] + r_ij2[alpha] * r_ij1[beta]) +
+             nn_u_ij1 * nn_d_u_ij2 * norm_r_ij2_m1 *
+                 (r_ij1[alpha] * r_ij2[beta] + r_ij2[alpha] * r_ij2[beta]) +
+             nn_u_ij1 * nn_u_ij2 * 2 * Identity[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // j1j1 direction
+  if (direction == 4) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_dipole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+            (nn_dd_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2 * r2_ij1_m1 *
+                 (r_ij1[alpha] * r_ij1[beta]) +
+             nn_d_u_ij1 * nn_u_ij2 * norm_r_ij1_m1 *
+                 (r_ij1[alpha] * r_ij2[beta] + r_ij2[alpha] * r_ij1[beta]) +
+             nn_d_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2 *
+                 hessian_r_ij1[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // j1j2 direction
+  if (direction == 5) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_dipole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+            (nn_d_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                 norm_r_ij2_m1 * (r_ij1[alpha] * r_ij2[beta]) +
+             nn_d_u_ij1 * nn_u_ij2 * norm_r_ij1_m1 *
+                 (r_ij1[alpha] * r_ij1[beta]) +
+             nn_u_ij1 * nn_d_u_ij2 * norm_r_ij2_m1 *
+                 (r_ij2[alpha] * r_ij2[beta]) +
+             nn_u_ij1 * nn_u_ij2 * Identity[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // j2j1 direction
+  if (direction == 7) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_dipole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+            (nn_d_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                 norm_r_ij1_m1 * (r_ij2[alpha] * r_ij1[beta]) +
+             nn_u_ij1 * nn_d_u_ij2 * norm_r_ij2_m1 *
+                 (r_ij2[alpha] * r_ij2[beta]) +
+             nn_d_u_ij1 * nn_u_ij2 * norm_r_ij1_m1 *
+                 (r_ij1[alpha] * r_ij1[beta]) +
+             nn_u_ij1 * nn_u_ij2 * Identity[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // j2j2 direction
+  if (direction == 8) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_dipole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+            (nn_u_ij1 * nn_dd_u_ij2 * r_ij1__dot__r_ij2 * r2_ij2_m1 *
+                 (r_ij2[alpha] * r_ij2[beta]) +
+             nn_u_ij1 * nn_d_u_ij2 * norm_r_ij2_m1 *
+                 (r_ij2[alpha] * r_ij1[beta] + r_ij1[alpha] * r_ij2[beta]) +
+             nn_u_ij1 * nn_d_u_ij2 * r_ij1__dot__r_ij2 *
+                 hessian_r_ij2[alpha * dim + beta]);
+      }
+    }
+  }
+}
+
+/********************************************************************************/
+
 static void dV2_dipole_ij1j2_dq2_FD(int direction, double* d2V_dipole_ij1j2_dq,
                                     const double* n, const double* q,
                                     const AtomicSpecie* spc) {
@@ -1841,6 +2554,81 @@ static void dV2_dipole_ij1j2_dq2_FD(int direction, double* d2V_dipole_ij1j2_dq,
   free(q_p);
   free(q_m);
   free(q_mm);
+}
+
+/********************************************************************************/
+
+
+KOKKOS_FUNCTION void dV2_dipole_ij1j2_dq2_FD_Kokkos(int direction, double* d2V_dipole_ij1j2_dq,
+                                    const double* n, const double* q,
+                                    const AtomicSpecie* spc, SoADevice *soADevice) {
+
+  constexpr unsigned int dim = NumberDimensions;
+  constexpr unsigned int num_sites = 3;
+  double dr = 1.0e-4;  // *rc;
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2V_dipole_ij1j2_dq[dof] = 0.0;
+  }
+
+  //! Evaluate function in the central value
+  double f_0 = 0.0;
+  V_dipole_ij1j2(&f_0, n, q, spc);
+
+  //! Allocate memory
+  double q_pp[dim * num_sites];
+  double q_p[dim * num_sites];
+  double q_m[dim * num_sites];
+  double q_mm[dim * num_sites];
+
+  //
+  for (unsigned int alpha = 0; alpha < dim; alpha++) {
+
+    unsigned int d_dof_i = direction / (1 + num_sites) * dim + alpha;
+
+    //! Compute the positions
+    for (unsigned int site_idx = 0; site_idx < num_sites; site_idx++) {
+
+      for (unsigned int gamma = 0; gamma < dim; gamma++) {
+
+        unsigned int dof_idx_aux = site_idx * dim + gamma;
+        bool D_alpha = (dof_idx_aux == d_dof_i) ? true : false;
+
+        q_pp[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr * 2;
+
+        q_p[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr;
+
+        q_m[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr;
+
+        q_mm[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr * 2;
+      }
+    }
+
+    //! Evaluate functions
+
+    // f(x + 2*Dx,y)
+    double f_pp = 0.0;
+    V_dipole_ij1j2_kokkos(&f_pp, n, q_pp, spc, soADevice);
+
+    // f(x + Dx,y)
+    double f_p = 0.0;
+    V_dipole_ij1j2_kokkos(&f_p, n, q_p, spc, soADevice);
+
+    // f(x - Dx,y)
+    double f_m = 0.0;
+    V_dipole_ij1j2_kokkos(&f_m, n, q_m, spc, soADevice);
+
+    // f(x - 2*Dx,y)
+    double f_mm = 0.0;
+    V_dipole_ij1j2_kokkos(&f_mm, n, q_mm, spc, soADevice);
+
+    d2V_dipole_ij1j2_dq[alpha * dim + alpha] =
+        (-f_pp + 16.0 * f_p - 30.0 * f_0 + 16.0 * f_m - f_mm) /
+        (12.0 * dr * dr);
+  }
+
+
 }
 
 /********************************************************************************/
@@ -1929,10 +2717,11 @@ potential_function V_quadrupole_ij1j2_adp_MgHx_constructor() {
   potential_function V_quadrupole_ij1j2_adp_MgHx;
 
   V_quadrupole_ij1j2_adp_MgHx.F = V_quadrupole_ij1j2;
-  V_quadrupole_ij1j2_adp_MgHx.FK = V_quadrupole_ij1j2_kokkos;
+  // V_quadrupole_ij1j2_adp_MgHx.FK = V_quadrupole_ij1j2_kokkos;
 
 
   V_quadrupole_ij1j2_adp_MgHx.dF_dq = dV_quadrupole_ij1j2_dq;
+//  V_quadrupole_ij1j2_adp_MgHx.dF_dq_k = dV_quadrupole_ij1j2_dq_kokkos;
   V_quadrupole_ij1j2_adp_MgHx.d2F_dq2 = dV2_quadrupole_ij1j2_dq2;
 
   V_quadrupole_ij1j2_adp_MgHx.dF_dq_FD = dV_quadrupole_ij1j2_dq_FD;
@@ -1999,8 +2788,8 @@ static void V_quadrupole_ij1j2(double* V_quadrupole_ij1_ij2, const double* n,
 
 /*********************************************************************************/
 
-KOKKOS_FUNCTION static void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
-  const double* q, const AtomicSpecie* spc, AdpPotencial_Device adp_Device_Default) {
+KOKKOS_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
+  const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
 
 unsigned int dim = NumberDimensions;
 unsigned int i = 0, j1 = 1, j2 = 2;
@@ -2016,20 +2805,20 @@ double r_ij2[3];
 //! Set cubic spline to evaluate the dipole interation curve
 CubicSpline w_ij1;
 if ((spc[i] == Mg) && (spc[j1] == Mg)) {
-w_ij1 = adp_Device_Default(0).w;
+w_ij1 = getSpline(AdpType::MgMg, SplineType::w, w_ij1, soADevice);
 } else if ((spc[i] == H) && (spc[j1] == H)) {
-w_ij1 = adp_Device_Default(1).w;
+w_ij1 = getSpline(AdpType::HH, SplineType::w, w_ij1, soADevice);
 } else {
-w_ij1 = adp_Device_Default(2).w;
+w_ij1 = getSpline(AdpType::MgH, SplineType::w, w_ij1, soADevice);
 }
 
 CubicSpline w_ij2;
 if ((spc[i] == Mg) && (spc[j2] == Mg)) {
-w_ij2 = adp_Device_Default(0).w;
+w_ij2 = getSpline(AdpType::MgMg, SplineType::w, w_ij2, soADevice);
 } else if ((spc[i] == H) && (spc[j2] == H)) {
-w_ij2 = adp_Device_Default(1).w;
+w_ij2 = getSpline(AdpType::HH, SplineType::w, w_ij2, soADevice);
 } else {
-w_ij2 = adp_Device_Default(2).w;
+w_ij2 = getSpline(AdpType::MgH, SplineType::w, w_ij2, soADevice);
 }
 
 //! Compute parameters
@@ -2098,6 +2887,11 @@ static void dV_quadrupole_ij1j2_dq(int direction,
     r2_ij2 += DSQR(r_ij2[alpha]);
     r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
   }
+
+  if (r2_ij1 == 0.0 || r2_ij2 == 0.0) {
+    return;
+  }
+
   double norm_r_ij1 = sqrt(r2_ij1);
   double norm_r_ij1_m1 = 1.0 / norm_r_ij1;
   double norm_r_ij2 = sqrt(r2_ij2);
@@ -2153,6 +2947,115 @@ static void dV_quadrupole_ij1j2_dq(int direction,
                nn_w_ij1 * nn_w_ij2 * 2 * r2_ij1 * r_ij2[alpha]);
     }
   }
+}
+
+/********************************************************************************/
+
+KOKKOS_FUNCTION void dV_quadrupole_ij1j2_dq_kokkos(int direction,
+  double* dV_quadrupole_ij1_ij2_dq,
+  const double* n, const double* q,
+  const AtomicSpecie* spc, const SoADevice* soADevice) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j1 = 1, j2 = 2;
+double r2_ij1 = 0.0;
+double r2_ij2 = 0.0;
+double r_ij1__dot__r_ij2 = 0.0;
+double r_ij1[3];
+double r_ij2[3];
+
+//! Set to zero
+for (unsigned int dof = 0; dof < 3; dof++) {
+dV_quadrupole_ij1_ij2_dq[dof] = 0.0;
+}
+
+//! Set cubic spline to evaluate the dipole interation curve
+CubicSpline w_ij1;
+if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+  w_ij1 = getSpline(AdpType::MgMg, SplineType::w, w_ij1, soADevice);
+} else if ((spc[i] == H) && (spc[j1] == H)) {
+  w_ij1 = getSpline(AdpType::HH, SplineType::w, w_ij1, soADevice);
+} else {
+  w_ij1 = getSpline(AdpType::MgH, SplineType::w, w_ij1, soADevice);
+}
+
+CubicSpline w_ij2;
+if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+  w_ij2 = getSpline(AdpType::MgMg, SplineType::w, w_ij1, soADevice);
+} else if ((spc[i] == H) && (spc[j2] == H)) {
+  w_ij2 = getSpline(AdpType::HH, SplineType::w, w_ij1, soADevice);
+} else {
+  w_ij2 = getSpline(AdpType::MgH, SplineType::w, w_ij1, soADevice);
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+r2_ij1 += dsqr(r_ij1[alpha]);
+r2_ij2 += dsqr(r_ij2[alpha]);
+r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+}
+
+if (r2_ij1 == 0.0 || r2_ij2 == 0.0) {
+  return;
+}
+
+double norm_r_ij1 = sqrt(r2_ij1);
+double norm_r_ij1_m1 = 1.0 / norm_r_ij1;
+double norm_r_ij2 = sqrt(r2_ij2);
+double norm_r_ij2_m1 = 1.0 / norm_r_ij2;
+double dsqr_r_ij1__dot__r_ij2 = dsqr(r_ij1__dot__r_ij2);
+
+double nn_w_ij1 = n[i] * n[j1] * cubic_spline(&w_ij1, norm_r_ij1);
+double nn_w_ij2 = n[i] * n[j2] * cubic_spline(&w_ij2, norm_r_ij2);
+
+double nn_d_w_ij1 = n[i] * n[j1] * d_cubic_spline(&w_ij1, norm_r_ij1);
+double nn_d_w_ij2 = n[i] * n[j2] * d_cubic_spline(&w_ij2, norm_r_ij2);
+
+//! Direction i
+if (direction == 0) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_quadrupole_ij1_ij2_dq[alpha] =
+(1.0 / 2.0) * (nn_d_w_ij1 * nn_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+norm_r_ij1_m1 * r_ij1[alpha] +
+nn_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+norm_r_ij2_m1 * r_ij2[alpha] +
+nn_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 *
+(r_ij1[alpha] + r_ij2[alpha])) -
+(1.0 / 6.0) *
+(nn_d_w_ij1 * nn_w_ij2 * norm_r_ij1 * r2_ij2 * r_ij1[alpha] +
+nn_w_ij1 * nn_d_w_ij2 * r2_ij1 * norm_r_ij2 * r_ij2[alpha] +
+nn_w_ij1 * nn_w_ij2 * 2 * r2_ij2 * r_ij1[alpha] +
+nn_w_ij1 * nn_w_ij2 * 2 * r2_ij1 * r_ij2[alpha]);
+}
+}
+
+//! Direction j1
+if (direction == 1) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_quadrupole_ij1_ij2_dq[alpha] =
+-0.5 * (nn_d_w_ij1 * nn_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+norm_r_ij1_m1 * r_ij1[alpha] +
+nn_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * r_ij2[alpha]) +
+(1.0 / 6.0) *
+(nn_d_w_ij1 * nn_w_ij2 * norm_r_ij1 * r2_ij2 * r_ij1[alpha] +
+nn_w_ij1 * nn_w_ij2 * 2 * r2_ij2 * r_ij1[alpha]);
+}
+}
+
+//! Direction j2
+if (direction == 2) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+dV_quadrupole_ij1_ij2_dq[alpha] =
+-0.5 * (nn_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+norm_r_ij2_m1 * r_ij2[alpha] +
+nn_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * r_ij1[alpha]) +
+(1.0 / 6.0) *
+(nn_w_ij1 * nn_d_w_ij2 * r2_ij1 * norm_r_ij2 * r_ij2[alpha] +
+nn_w_ij1 * nn_w_ij2 * 2 * r2_ij1 * r_ij2[alpha]);
+}
+}
 }
 
 /********************************************************************************/
@@ -2488,6 +3391,278 @@ static void dV2_quadrupole_ij1j2_dq2(int direction,
 
 /********************************************************************************/
 
+
+KOKKOS_FUNCTION void dV2_quadrupole_ij1j2_dq2_Kokkos(int direction,
+                                     double* d2V_quadrupole_ij1j2_dq,
+                                     const double* n, const double* q,
+                                     const AtomicSpecie* spc,
+                                     SoADevice *soADevice) {
+
+  unsigned int dim = NumberDimensions;
+  unsigned int i = 0, j1 = 1, j2 = 2;
+  double r2_ij1 = 0.0;
+  double r2_ij2 = 0.0;
+  double r_ij1__dot__r_ij2 = 0.0;
+  double r_ij1[3];
+  double r_ij2[3];
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2V_quadrupole_ij1j2_dq[dof] = 0.0;
+  }
+
+  //! Set cubic spline to evaluate the dipole interation curve
+  CubicSpline w_ij1;
+  if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+    w_ij1 = getSpline(AdpType::MgMg, SplineType::w, w_ij1, soADevice);
+  } else if ((spc[i] == H) && (spc[j1] == H)) {
+    w_ij1 = getSpline(AdpType::HH, SplineType::w, w_ij1, soADevice);
+  } else {
+    w_ij1 = getSpline(AdpType::MgH, SplineType::w, w_ij1, soADevice);
+  }
+
+  CubicSpline w_ij2;
+  if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+    w_ij2 = getSpline(AdpType::MgMg, SplineType::w, w_ij2, soADevice);
+  } else if ((spc[i] == H) && (spc[j2] == H)) {
+    w_ij2 = getSpline(AdpType::HH, SplineType::w, w_ij2, soADevice);
+  } else {
+    w_ij2 = getSpline(AdpType::MgH, SplineType::w, w_ij2, soADevice);
+  }
+
+  //! Compute parameters
+  for (unsigned int alpha = 0; alpha < dim; alpha++) {
+    r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+    r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+    r2_ij1 += dsqr(r_ij1[alpha]);
+    r2_ij2 += dsqr(r_ij2[alpha]);
+    r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+  }
+  double r2_ij1_m1 = 1.0 / r2_ij1;
+  double norm_r_ij1 = sqrt(r2_ij1);
+  double norm_r_ij1_m1 = 1.0 / norm_r_ij1;
+  double r2_ij2_m1 = 1.0 / r2_ij2;
+  double norm_r_ij2 = sqrt(r2_ij2);
+  double norm_r_ij2_m1 = 1.0 / norm_r_ij2;
+  double dsqr_r_ij1__dot__r_ij2 = dsqr(r_ij1__dot__r_ij2);
+
+  double hessian_r_ij1[NumberDimensions * NumberDimensions] = {
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  compute_hessian_norm_r(hessian_r_ij1, r_ij1, norm_r_ij1);
+  double hessian_r_ij2[NumberDimensions * NumberDimensions] = {
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  compute_hessian_norm_r(hessian_r_ij2, r_ij2, norm_r_ij2);
+
+  double Identity[NumberDimensions * NumberDimensions] = {
+      1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+
+  double nn_w_ij1 = n[i] * n[j1] * cubic_spline(&w_ij1, norm_r_ij1);
+  double nn_w_ij2 = n[i] * n[j2] * cubic_spline(&w_ij2, norm_r_ij2);
+
+  double nn_d_w_ij1 = n[i] * n[j1] * d_cubic_spline(&w_ij1, norm_r_ij1);
+  double nn_d_w_ij2 = n[i] * n[j2] * d_cubic_spline(&w_ij2, norm_r_ij2);
+
+  double nn_dd_w_ij1 = n[i] * n[j1] * d2_cubic_spline(&w_ij1, norm_r_ij1);
+  double nn_dd_w_ij2 = n[i] * n[j2] * d2_cubic_spline(&w_ij2, norm_r_ij2);
+
+  // ii direction
+  if (direction == 0) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_quadrupole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+                (nn_dd_w_ij1 * nn_w_ij2 * dsqr_r_ij1__dot__r_ij2 * r2_ij1_m1 *
+                     (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_d_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     norm_r_ij1_m1 * norm_r_ij2_m1 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     hessian_r_ij1[alpha * dim + beta] +
+                 nn_d_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     norm_r_ij2_m1 * norm_r_ij1_m1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_dd_w_ij2 * dsqr_r_ij1__dot__r_ij2 * r2_ij2_m1 *
+                     (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     hessian_r_ij2[alpha * dim + beta] +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 4 * r_ij1__dot__r_ij2 *
+                     Identity[alpha * dim + beta]) -
+            (1.0 / 6.0) *
+                (nn_dd_w_ij1 * nn_w_ij2 * r2_ij2 *
+                     (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_d_w_ij1 * nn_d_w_ij2 * norm_r_ij1 * norm_r_ij2 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r2_ij2 *
+                     ((r_ij1[alpha] * r_ij1[beta]) / norm_r_ij1) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r2_ij1 *
+                     ((r_ij1[alpha] * r_ij2[beta]) / norm_r_ij1) +
+                 nn_d_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2 *
+                     hessian_r_ij1[alpha * dim + beta] +
+                 nn_d_w_ij1 * nn_d_w_ij2 * norm_r_ij2 * norm_r_ij1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_dd_w_ij2 * r2_ij1 *
+                     (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r2_ij2 *
+                     ((r_ij2[alpha] * r_ij1[beta]) / norm_r_ij2) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r2_ij1 *
+                     ((r_ij2[alpha] * r_ij2[beta]) / norm_r_ij2) +
+                 nn_w_ij1 * nn_d_w_ij2 * r2_ij2 * r2_ij1 *
+                     hessian_r_ij2[alpha * dim + beta] +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r2_ij2 *
+                     ((r_ij1[alpha] * r_ij1[beta]) / norm_r_ij1) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * norm_r_ij1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * norm_r_ij2 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r2_ij1 *
+                     ((r_ij2[alpha] * r_ij2[beta]) / norm_r_ij2) +
+                 nn_w_ij1 * nn_w_ij2 * 4 * (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * r2_ij2 *
+                     Identity[alpha * dim + beta] +
+                 nn_w_ij1 * nn_w_ij2 * 4 * (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * r2_ij1 *
+                     Identity[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // j1j1 direction
+  if (direction == 4) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_quadrupole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+                (nn_dd_w_ij1 * nn_w_ij2 * dsqr_r_ij1__dot__r_ij2 * r2_ij1_m1 *
+                     (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     hessian_r_ij1[alpha * dim + beta] +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij2[alpha] * r_ij2[beta])) -
+            (1.0 / 6.0) * (nn_dd_w_ij1 * nn_w_ij2 * r2_ij2 *
+                               (r_ij1[alpha] * r_ij1[beta]) +
+                           nn_d_w_ij1 * nn_w_ij2 * 2 * r2_ij2 *
+                               ((r_ij1[alpha] * r_ij1[beta]) / norm_r_ij1) +
+                           nn_d_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2 *
+                               hessian_r_ij1[alpha * dim + beta] +
+                           nn_d_w_ij1 * nn_w_ij2 * 2 * r2_ij2 *
+                               ((r_ij1[alpha] * r_ij1[beta]) / norm_r_ij1) +
+                           nn_w_ij1 * nn_w_ij2 * 2 * r2_ij2 *
+                               Identity[alpha * dim + beta]);
+      }
+    }
+  }
+
+  // j1j2 direction
+  if (direction == 5) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_quadrupole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+                (nn_d_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     norm_r_ij1_m1 * norm_r_ij2_m1 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 *
+                     Identity[alpha * dim + beta]) -
+            (1.0 / 6.0) *
+                (nn_d_w_ij1 * nn_d_w_ij2 * norm_r_ij1 * norm_r_ij2 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * norm_r_ij1 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * norm_r_ij2 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 4 * (r_ij1[alpha] * r_ij2[beta]));
+      }
+    }
+  }
+
+  // j2j1 direction
+  if (direction == 7) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_quadrupole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+                (nn_d_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     norm_r_ij2_m1 * norm_r_ij1_m1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij1_m1 *
+                     (r_ij1[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * r_ij1__dot__r_ij2 *
+                     Identity[alpha * dim + beta]) -
+            (1.0 / 6.0) *
+                (nn_d_w_ij1 * nn_d_w_ij2 * norm_r_ij2 * norm_r_ij1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * norm_r_ij2 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_d_w_ij1 * nn_w_ij2 * 2 * norm_r_ij1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 4 * (r_ij2[alpha] * r_ij1[beta]));
+      }
+    }
+  }
+
+  // j2j2 direction
+  if (direction == 8) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      for (unsigned int beta = 0; beta < dim; beta++) {
+        d2V_quadrupole_ij1j2_dq[alpha * dim + beta] =
+            (1.0 / 2.0) *
+                (nn_w_ij1 * nn_dd_w_ij2 * dsqr_r_ij1__dot__r_ij2 * r2_ij2_m1 *
+                     (r_ij2[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij2[alpha] * r_ij1[beta]) +
+                 nn_w_ij1 * nn_d_w_ij2 * dsqr_r_ij1__dot__r_ij2 *
+                     hessian_r_ij2[alpha * dim + beta] +
+                 nn_w_ij1 * nn_d_w_ij2 * 2 * r_ij1__dot__r_ij2 * norm_r_ij2_m1 *
+                     (r_ij1[alpha] * r_ij2[beta]) +
+                 nn_w_ij1 * nn_w_ij2 * 2 * (r_ij1[alpha] * r_ij1[beta])) -
+            (1.0 / 6.0) * (nn_w_ij1 * nn_dd_w_ij2 * r2_ij1 *
+                               (r_ij2[alpha] * r_ij2[beta]) +
+                           nn_w_ij1 * nn_d_w_ij2 * 2 * r2_ij1 *
+                               ((r_ij2[alpha] * r_ij2[beta]) / norm_r_ij2) +
+                           nn_w_ij1 * nn_d_w_ij2 * r2_ij2 * r2_ij1 *
+                               hessian_r_ij2[alpha * dim + beta] +
+                           nn_w_ij1 * nn_d_w_ij2 * 2 * r2_ij1 *
+                               ((r_ij2[alpha] * r_ij2[beta]) / norm_r_ij2) +
+                           nn_w_ij1 * nn_w_ij2 * 2 * r2_ij1 *
+                               Identity[alpha * dim + beta]);
+      }
+    }
+  }
+}
+
+/********************************************************************************/
+
 static void dV2_quadrupole_ij1j2_dq2_FD(int direction,
                                         double* d2V_quadrupole_ij1j2_dq,
                                         const double* n, const double* q,
@@ -2566,6 +3741,85 @@ static void dV2_quadrupole_ij1j2_dq2_FD(int direction,
   free(q_p);
   free(q_m);
   free(q_mm);
+}
+
+/********************************************************************************/
+
+
+KOKKOS_FUNCTION void dV2_quadrupole_ij1j2_dq2_FD_Kokkos(int direction,
+                                        double* d2V_quadrupole_ij1j2_dq,
+                                        const double* n, const double* q,
+                                        const AtomicSpecie* spc,
+                                        SoADevice *soADevice ) {
+
+  constexpr unsigned int dim = NumberDimensions;
+  constexpr unsigned int num_sites = 3;
+  double dr = 1.0e-4;  // *rc;
+
+  //! Set to zero
+  for (unsigned int dof = 0; dof < 9; dof++) {
+    d2V_quadrupole_ij1j2_dq[dof] = 0.0;
+  }
+
+  //! Evaluate function in the central value
+  double f_0 = 0.0;
+  V_quadrupole_ij1j2_kokkos(&f_0, n, q, spc, soADevice);
+
+  //! Allocate memory
+  double q_pp[dim * num_sites];
+  double q_p[dim * num_sites];
+  double q_m[dim * num_sites];
+  double q_mm[dim * num_sites];
+
+  // Diagonal terms
+  if ((direction == 0) || (direction == 4) || (direction == 8)) {
+    for (unsigned int alpha = 0; alpha < dim; alpha++) {
+
+      unsigned int d_dof_i = direction / (1 + num_sites) * dim + alpha;
+
+      //! Compute the positions
+      for (unsigned int aux_site_idx = 0; aux_site_idx < num_sites;
+           aux_site_idx++) {
+
+        for (unsigned int gamma = 0; gamma < dim; gamma++) {
+
+          unsigned int dof_idx_aux = aux_site_idx * dim + gamma;
+          bool D_alpha = (dof_idx_aux == d_dof_i) ? true : false;
+
+          q_pp[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr * 2;
+
+          q_p[dof_idx_aux] = q[dof_idx_aux] + D_alpha * dr;
+
+          q_m[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr;
+
+          q_mm[dof_idx_aux] = q[dof_idx_aux] - D_alpha * dr * 2;
+        }
+      }
+
+      //! Evaluate functions
+
+      // f(x + 2*Dx,y)
+      double f_pp = 0.0;
+      V_quadrupole_ij1j2_kokkos(&f_pp, n, q_pp, spc, soADevice);
+
+      // f(x + Dx,y)
+      double f_p = 0.0;
+      V_quadrupole_ij1j2_kokkos(&f_p, n, q_p, spc, soADevice);
+
+      // f(x - Dx,y)
+      double f_m = 0.0;
+      V_quadrupole_ij1j2_kokkos(&f_m, n, q_m, spc, soADevice);
+
+      // f(x - 2*Dx,y)
+      double f_mm = 0.0;
+      V_quadrupole_ij1j2_kokkos(&f_mm, n, q_mm, spc, soADevice);
+
+      d2V_quadrupole_ij1j2_dq[alpha * dim + alpha] =
+          (-f_pp + 16.0 * f_p - 30.0 * f_0 + 16.0 * f_m - f_mm) /
+          (12.0 * dr * dr);
+    }
+  }
+
 }
 
 /********************************************************************************/

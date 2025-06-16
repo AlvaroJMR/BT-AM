@@ -25,6 +25,8 @@
 #include <petscsf.h>
 #include <petscvec.h>
 #include <Kokkos_Core.hpp>
+#include <Kokkos_DualView.hpp>
+
 
 #ifndef PETSC_SUCCESS
 #define PETSC_SUCCESS 0
@@ -54,7 +56,8 @@ typedef Kokkos::DefaultExecutionSpace              DefaultExecSpace;
 typedef DefaultExecSpace::memory_space             DefaultMemorySpace;
 typedef Kokkos::HostSpace                          HostMemorySpace;
 typedef Kokkos::IndexType<PetscInt>                IndexType;
-typedef DefaultExecSpace::array_layout             DefaultLayout;
+//typedef DefaultExecSpace::array_layout             DefaultLayout;
+typedef Kokkos::LayoutRight DefaultLayout;
 
 /**
  * @brief Create dictionary for the species
@@ -250,14 +253,21 @@ typedef struct {
 
 } AtomTopology;
 
+typedef Kokkos::View<double***, DefaultLayout, DefaultMemorySpace> ThreeD_Double_View;
 typedef Kokkos::View<double**, DefaultLayout, DefaultMemorySpace> PetscScalar_Matrix_Default;
 typedef Kokkos::View<PetscScalar*,  DefaultLayout, DefaultMemorySpace> PetscScalar_Vector_Default;
+
+
+typedef Kokkos::View<int**, DefaultLayout, DefaultMemorySpace> Int_Matrix_Default;
+typedef Kokkos::View<int*, DefaultLayout, DefaultMemorySpace> Int_Vector_Default;
 
 typedef Kokkos::View<double**, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Matrix_Host;
 typedef Kokkos::View<PetscScalar*,  DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Vector_Host;
 
 typedef Kokkos::View<PetscInt*, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscInt_Vector_Host;
 typedef Kokkos::View<PetscInt*, DefaultLayout, DefaultMemorySpace> PetscInt_Vector_Default;
+
+typedef Kokkos::View<double*, Kokkos::LayoutStride, DefaultMemorySpace, Kokkos::MemoryUnmanaged> aux_Vector;
 
 typedef struct {
   int numneigh;
@@ -272,6 +282,10 @@ typedef Kokkos::View<AtomTopologyKokkos*, DefaultLayout, DefaultMemorySpace> Ato
 typedef Kokkos::View<double*, DefaultLayout, HostMemorySpace> View_Double_Vector_Host;
 typedef Kokkos::View<double*, DefaultLayout, DefaultMemorySpace> View_Double_Vector_Device;
 typedef Kokkos::View<double**, DefaultLayout, DefaultMemorySpace> View_Double_Matrix_Device;
+typedef Kokkos::DualView< double*, DefaultLayout, DefaultMemorySpace > DualView_Vector_Double;
+typedef Kokkos::DualView< double**, DefaultLayout, DefaultMemorySpace > DualView_Matrix_Double;
+typedef Kokkos::DualView< int*, DefaultLayout, DefaultMemorySpace > DualView_Vector_Int;
+
 
 /**
  * @brief Nonuniform cubic splines with n intervals
@@ -284,6 +298,10 @@ typedef struct CubicSpline {
 
   //! @param  n: number of segments of the cubic spline
   int n;
+
+  //! @param  isKernel: is executed in a kernel
+  //! @note If isKernel is true, the data is stored in device memory and executed in default execution space.
+  bool isKernel;
 
   #if USE_KOKKOS == 0
 
@@ -327,39 +345,60 @@ typedef struct CubicSpline {
   #if USE_KOKKOS == 1
 
   //! @param x: independent variable
-  View_Double_Vector_Device x;
+  View_Double_Vector_Host x;
 
   //! @param a: coefficient of grade 0 of the cubic spline function
-  View_Double_Vector_Device a;
+  View_Double_Vector_Host a;
 
   //! @param b: coefficient of grade 1 of the cubic spline function
-  View_Double_Vector_Device b;
+  View_Double_Vector_Host b;
 
   //! @param c: coefficient of grade 2 of the cubic spline function
-  View_Double_Vector_Device c;
+  View_Double_Vector_Host c;
 
   //! @param d: coefficient of grade 3 of the cubic spline function
-  View_Double_Vector_Device d;
+  View_Double_Vector_Host d;
 
   //! @param db: coefficient of grade 0 of the first derivative of the cubic
   //! spline function
-  View_Double_Vector_Device db;
+  View_Double_Vector_Host db;
 
   //! @param dc: coefficient of grade 1 of the first derivative of the cubic
   //! spline function
-  View_Double_Vector_Device dc;
+  View_Double_Vector_Host dc;
 
   //! @param dd: coefficient of grade 2 of the first derivative of the cubic
   //! spline function
-  View_Double_Vector_Device dd;
+  View_Double_Vector_Host dd;
 
   //! @param ddc: coefficient of grade 0 of the second derivative of the cubic
   //! spline function
-  View_Double_Vector_Device ddc;
+  View_Double_Vector_Host ddc;
 
   //! @param ddd: coefficient of grade 1 of the second derivative of the cubic
   //! spline function
-  View_Double_Vector_Device ddd;
+  View_Double_Vector_Host ddd;
+
+  double *x_d, *a_d, *b_d, *c_d, 
+  *d_d, *db_d, *dc_d, *dd_d, *ddc_d, *ddd_d;
+  /*View_Double_Vector_Device x_d, a_d, b_d, c_d, 
+      d_d, db_d, dc_d, dd_d, ddc_d, ddd_d;
+
+
+  void allocate(int _n){
+        n = _n;
+        std::size_t N = std::size_t(n)+1;
+        x_d = View_Double_Vector_Device("spline.x",   N);
+        a_d   = View_Double_Vector_Device("spline.a",   N);
+        b_d   = View_Double_Vector_Device("spline.b",   N);
+        c_d   = View_Double_Vector_Device("spline.c",   N);
+        d_d   = View_Double_Vector_Device("spline.d",   N);
+        db_d  = View_Double_Vector_Device("spline.db",  N);
+        dc_d  = View_Double_Vector_Device("spline.dc",  N);
+        dd_d  = View_Double_Vector_Device("spline.dd",  N);
+        ddc_d = View_Double_Vector_Device("spline.ddc", N);
+        ddd_d = View_Double_Vector_Device("spline.ddd", N);
+      } */
 
   #endif
 
@@ -570,6 +609,9 @@ typedef struct adpPotential {
   double r_cutoff;
 
 } adpPotential;
+
+typedef Kokkos::DualView<adpPotential*, DefaultMemorySpace> AdpPot_DualView;
+
 
 /**
  * @brief Structure which contains user define equations to evaluate any sort of
@@ -950,7 +992,7 @@ static int imin_arg1, imin_arg2;
 #define IMIN(a, b)                                                             \
   (imin_arg1 = (a), imin_arg2 = (b),                                           \
    (imin_arg1) < (imin_arg2) ? (imin_arg1) : (imin_arg2))
-#define SIGN(a, b) ((b) >= 0.0 ? fabs(a) : -fabs(a)) s
+#define SIGN(a, b) ((b) >= 0.0 ? fabs(a) : -fabs(a)) 
 
 /*
  Kokkos 
@@ -966,6 +1008,66 @@ typedef Kokkos::View<AtomicSpecie*, DefaultLayout, DefaultMemorySpace> AtomSpeci
 typedef Kokkos::View<adpPotential*, DefaultLayout, HostMemorySpace> AdpPotencial_Host;
 typedef Kokkos::View<adpPotential*, DefaultLayout, DefaultMemorySpace> AdpPotencial_Device;
 
+
+enum class AdpType : int { MgMg = 0, HH = 1, MgH = 2 };
+enum class SplineType : int { embed = 0, rho = 1, pair = 2, u = 3, w = 4 };
+
+
+struct SoA_ADP {
+
+  DualView_Vector_Int      n_embed, n_rho, n_pair, n_u, n_w;
+  DualView_Vector_Double   mass, radius, factor, r_cutoff;
+  DualView_Vector_Double  dx_embed, dx_rho, dx_pair, dx_u, dx_w;
+
+  DualView_Vector_Double   embed_x,  embed_a,  embed_b,  embed_c,  embed_d,
+                           embed_db, embed_dc, embed_dd, embed_ddc, embed_ddd;
+
+  DualView_Vector_Double   rho_x,    rho_a,    rho_b,    rho_c,    rho_d,
+                           rho_db,   rho_dc,   rho_dd,   rho_ddc,  rho_ddd;
+
+  DualView_Vector_Double   pair_x,   pair_a,   pair_b,   pair_c,   pair_d,
+                           pair_db,  pair_dc,  pair_dd,  pair_ddc, pair_ddd;
+
+  DualView_Vector_Double   u_x,      u_a,      u_b,      u_c,      u_d,
+                           u_db,     u_dc,     u_dd,     u_ddc,    u_ddd;
+
+  DualView_Vector_Double   w_x,      w_a,      w_b,      w_c,      w_d,
+                           w_db,     w_dc,     w_dd,     w_ddc,    w_ddd;
+};
+
+struct SoADevice {
+  int      M;
+
+  int     *n_embed, *n_rho, *n_pair, *n_u, *n_w;
+
+  double  *dx_embed, *dx_rho, *dx_pair, *dx_u, *dx_w;
+
+  double  *mass, *radius, *factor, *r_cutoff;
+
+  double  *embed_x,  *embed_a,  *embed_b,  *embed_c,  *embed_d,
+          *embed_db, *embed_dc, *embed_dd, *embed_ddc, *embed_ddd;
+
+  double  *rho_x,    *rho_a,    *rho_b,    *rho_c,    *rho_d,
+          *rho_db,   *rho_dc,   *rho_dd,   *rho_ddc,  *rho_ddd;
+
+  double  *pair_x,   *pair_a,   *pair_b,   *pair_c,   *pair_d,
+          *pair_db,  *pair_dc,  *pair_dd,  *pair_ddc, *pair_ddd;
+
+  double  *u_x,      *u_a,      *u_b,      *u_c,      *u_d,
+          *u_db,     *u_dc,     *u_dd,     *u_ddc,    *u_ddd;
+
+  double  *w_x,      *w_a,      *w_b,      *w_c,      *w_d,
+          *w_db,     *w_dc,     *w_dd,     *w_ddc,    *w_ddd;
+   
+};
+
+
+typedef Kokkos::View<SoADevice, DefaultLayout, DefaultMemorySpace> DevSnap;
+typedef  Kokkos::View< SoADevice, DefaultLayout, DefaultMemorySpace, Kokkos::MemoryUnmanaged > DevSnapUnmanaged;
+
+/*******************************************************/
+
+
 /****************************************************************************************** */
 /**
  * @brief This structures defines a function and its derivatives
@@ -979,11 +1081,17 @@ typedef struct {
 
   void (*FK)(double *F, const double *xi, const double *q,
             const AtomicSpecie *spc, AdpPotencial_Device adp_Device_Default);
-                   
+
+  void (*FK2)(double *F, const double *xi, const double *q,
+            const AtomicSpecie *spc, SoADevice *soADevice);                 
 
   /*! @param dF_dq: Gradient of the function (analytical) */
   void (*dF_dq)(int direction, double *dF_dq, const double *xi, const double *q,
                 const AtomicSpecie *spc);
+  
+  void (*dF_dq_k)(int direction, double* dV_dipole_ij1j2_dq,
+    const double* n, const double* q,
+    const AtomicSpecie* spc, const AdpPotencial_Device adp_Device_Default);              
 
   /*! @param d2F_dq2: Hessian of the function (analytical) */
   void (*d2F_dq2)(int direction, double *d2F_dq2, const double *xi,
@@ -1003,7 +1111,8 @@ typedef struct {
 
 } potential_function;
 
-/*******************************************************/
+
+/****************************************************************************************** */
 
 #endif
 

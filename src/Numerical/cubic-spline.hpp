@@ -38,7 +38,7 @@ int init_spline(CubicSpline *cs, int n, double x);
  * @param x
  * @return double
  */
-double cubic_spline(CubicSpline *cs, double x);
+KOKKOS_FUNCTION double cubic_spline(CubicSpline *cs, double x);
 
 /**
  * @brief
@@ -47,7 +47,7 @@ double cubic_spline(CubicSpline *cs, double x);
  * @param x
  * @return double
  */
-double d_cubic_spline(CubicSpline *cs, double x);
+KOKKOS_FUNCTION double d_cubic_spline(CubicSpline *cs, double x);
 
 /**
  * @brief
@@ -56,6 +56,6 @@ double d_cubic_spline(CubicSpline *cs, double x);
  * @param x
  * @return double
  */
-double d2_cubic_spline(CubicSpline *cs, double x);
+KOKKOS_FUNCTION double d2_cubic_spline(CubicSpline *cs, double x);
 
 #endif

@@ -21,7 +21,6 @@ option(src_BUILD_TESTING "Use Check library" ON)
 
 option(USE_KOKKOS "Use Kokkos" ON)
 
-option(FORCE_REBUILD_KOKKOS "Recompile Kokkos" ON)
 
 # Include coverage
 option(ENABLE_COVERAGE "Use Check library" OFF)
@@ -76,7 +75,6 @@ endif()
 if (CMAKE_BUILD_TYPE MATCHES "Debug")
 message(STATUS "Debug mode")
 add_definitions("-DDEBUG_MODE")
-#set(CMAKE_CXX_FLAGS_DEBUG "-openmp --coverage -O0 -g -Wall -Wpedantic -Wextra -Wunused-variable")
 set(CMAKE_CXX_FLAGS_DEBUG "--coverage -O0 -g -Wall -Wpedantic -Wextra -Wunused-variable")
 elseif(CMAKE_BUILD_TYPE MATCHES "Release")
 message(STATUS "Release mode")
@@ -163,11 +161,15 @@ endif()
 
 if(USE_KOKKOS)
   find_package(Kokkos CONFIG REQUIRED)
+  #find_package(Kokkos CONFIG REQUIRED COMPONENTS cuda serial)
   add_definitions(-DUSE_KOKKOS=1)
 else()
   add_definitions(-DUSE_KOKKOS=0)
 endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --expt-relaxed-constexpr")
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+#set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -g -G -lineinfo")
 
 ###############################################################################
 ## Create executable ##########################################################
@@ -184,7 +186,6 @@ include_directories(BEFORE
 file(GLOB_RECURSE src_src 
   src/ADP/MgHx-ADP.cpp 
   src/ADP/density.cpp
-  #  src/ADP/MgHx-mf-V-bulk.cpp  
   src/Atoms/Atom.cpp    
   src/Atoms/Ghosts.cpp
   src/Atoms/Neighbors.cpp  
@@ -192,7 +193,6 @@ file(GLOB_RECURSE src_src
   src/IO/dump-input.cpp
   src/IO/hdf5-io.cpp
   src/IO/dump-output.cpp
-  #  src/Mechanical-eqs/Mechanical-Relaxation-bulk.cpp
   src/Numerical/cubic-spline.cpp
   src/Numerical/Quadrature-Measure.cpp
   src/Numerical/Quadrature-Hermitian-3th.cpp
@@ -201,11 +201,16 @@ file(GLOB_RECURSE src_src
   src/Periodic-Boundary/boundary_conditions.cpp
 )
 
-###############################################################################
-## Unit test ##################################################################
-###############################################################################
 add_executable("exe-BT-AM" ${src_src} main-BT-AM.cpp)
 target_link_libraries(exe-BT-AM PRIVATE Kokkos::kokkos)
 target_compile_definitions("exe-BT-AM" PUBLIC -DGH3TH_INTEGRAL)
 target_compile_definitions("exe-BT-AM" PUBLIC -DNUMERICAL_DERIVATIVES=0)
-
+target_compile_definitions("exe-BT-AM" PUBLIC -DEIGEN_USE_GPU)
+#target_compile_options(exe-BT-AM 
+#  PRIVATE
+#    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
+#)
+#target_compile_options(exe-BT-AM
+#  PRIVATE 
+#    --expt-relaxed-constexpr
+#)

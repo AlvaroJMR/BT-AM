@@ -18,6 +18,8 @@
 #include "Atoms/Neighbors.hpp"
 // clang-format on
 
+#include <Kokkos_Core.hpp>
+
 /**
  * @brief Arguments of the integral
  *
@@ -50,6 +52,32 @@ typedef struct {
 
 } gaussian_measure_ctx;
 
+/* Gaussian measure for Kokkos*/
+
+typedef struct {
+
+  int num_sites;
+
+  int intergal_dim;
+
+  Int_Vector_Default dof_table;
+
+  Int_Vector_Default dof_table_aux;
+
+  Int_Vector_Default gp_board;
+
+  Int_Vector_Default active_dof;
+
+  double *mean_q_ij;
+
+  double *stddev_q_ij;
+
+  double *xi_ij;
+
+  AtomicSpecie *spc;
+
+} gaussian_measure_ctx_kokkos;
+
 /**
  * @brief Fill out integral context
  *
@@ -73,5 +101,15 @@ gaussian_measure_ctx fill_out_gaussian_measure(double *mean_q_ij,   //!
  * @param measure
  */
 void destroy_gaussian_measure(gaussian_measure_ctx *measure);
+
+KOKKOS_FUNCTION void fill_out_gaussian_measure_Kokkos (double* mean_q_ij,
+                                               double* stddev_q_ij,
+                                               double* xi_ij, AtomicSpecie* spc,
+                                               int* dof_table,
+                                               unsigned int NumSites,
+                                               gaussian_measure_ctx_kokkos* ctx); 
+
+typedef Kokkos::View<gaussian_measure_ctx_kokkos*, DefaultLayout, HostMemorySpace> gaussian_measure_ctx_Host;
+typedef Kokkos::View<gaussian_measure_ctx_kokkos*, DefaultLayout, DefaultMemorySpace> gaussian_measure_ctx_Default;                                               
 
 #endif // Quadrature_Measure_HPP
