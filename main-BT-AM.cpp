@@ -295,9 +295,10 @@ int main(int argc, char **argv) {
   Kokkos::fence();
   PetscBarrier((PetscObject)NULL);
   double time = timer.seconds();
+  if (rank_MPI == 0){
   std::cout << "Tiempo que ha tardado en las operaciones con Kokkos: " << time << " seconds" << std::endl;
   std::cout << "Tiempo que ha tardado en las operaciones sin Kokkos: " << time2 << " seconds" << std::endl;
-
+  }
 
 //! Migrate ghost field (energy density) sin Kokkos
 
@@ -337,7 +338,7 @@ double global_mean = global_sum / (double)global_n;
 if (!rank_MPI) {
   printf("Media global (incluyendo ghosts) = %g\n", global_mean);
 } */
-
+if (rank_MPI == 0){
 double eigen_mean = mf_rho.mean();
 
 double eigen_variance = ((mf_rho.array() - eigen_mean).square().sum()) / static_cast<double>(n_sites_local_ghosted-1);
@@ -354,7 +355,7 @@ std::cout << "Kokkos: Media = " << Kokkos_mean_test
           << ", Varianza = " << Kokkos_variance_test << std::endl;
 
 
-
+}
   
   // PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "idx", NULL, NULL, (void**)&idx_q_ptr));
   
@@ -374,9 +375,9 @@ site_u, mean_q, xi, mf_rho, specie_ptr, atom_topology[site_u]);
 //! @brief Update local contribution of the residual equation
 V_local += V_u;
 }
-
+if (rank_MPI == 0) {
 std::cout << "Acabe potencial sin Kokkos: " << V_local << std::endl;
-
+}
 
 double V_local_Kokkos = 0.0;
 View_Double_Matrix_Device mean_q_ij1_all_n_local("mean_q_ij1_all", n_sites_local, 6);
@@ -392,7 +393,9 @@ Kokkos::parallel_reduce(
     },
     V_local_Kokkos);  
 
-  std::cout << "Acabe potencial en Kokkos: " << V_local_Kokkos << std::endl;
+  if (rank_MPI == 0){  
+    std::cout << "Acabe potencial en Kokkos: " << V_local_Kokkos << std::endl;
+  }
 
   PetscScalar* stdv_q_ptr;
   PetscCall(DMSwarmGetField(Simulation.atomistic_data, "stdv-q", NULL, NULL,
@@ -446,9 +449,11 @@ Kokkos::parallel_reduce(
     mf_rho_Default(n_sites_local_u) =  result; 
 }); 
 
+if (rank_MPI == 0){
 std::cout << "Tiempo que ha tardado en las operaciones sin Kokkos: " << timer3.seconds() << " seconds" << std::endl;
 
 std::cout << "Tiempo que ha tardado en las operaciones con Kokkos: " << timer4.seconds() << " seconds" << std::endl;
+
 
 double eigen_mean1 = mf_rho.mean();
 double eigen_variance1 = ((mf_rho.array() - eigen_mean1).square().sum()) / static_cast<double>(n_sites_local_ghosted - 1);
@@ -465,7 +470,7 @@ double Kokkos_variance_test1 = ((mf_rho_test1.array() - Kokkos_mean_test1).squar
 
 std::cout << "Kokkos: Media = " << Kokkos_mean_test1
           << ", Varianza = " << Kokkos_variance_test1 << std::endl;
-
+}
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Get the thermal Lagrange Multiplier (beta) vector
     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -500,9 +505,10 @@ Kokkos::Timer timer5;
   }
 
   double time5 = timer5.seconds();
+  if (rank_MPI == 0){
   std::cout << "Tiempo sin Kokkos (timer5): " << time5 << " seconds" << std::endl;
   std::cout << "L0_local sin Kokkos: " << L0_local << std::endl;
-
+  }
 
   PetscScalar_Vector_Host beta_ptr_Kokkos_Host(beta_ptr, static_cast<size_t>(n_sites_local_ghosted));
   PetscScalar_Vector_Default beta_ptr_Kokkos_Default("beta_ptr_Device", static_cast<size_t>(n_sites_local_ghosted));
@@ -539,9 +545,10 @@ Kokkos::Timer timer5;
       L0_Local_Kokkos);
 
   double time6 = timer6.seconds();
+  if (rank_MPI == 0){
   std::cout << "Tiempo con Kokkos (timer6): " << time6 << " seconds" << std::endl;
   std::cout << "L0_Local_Kokkos: " << L0_Local_Kokkos << std::endl;  
-  
+  }
   unsigned int dim = NumberDimensions;
 
   Vec X_dist, X_loc;
@@ -644,8 +651,9 @@ Kokkos::Timer timer5;
   }
 
   double time7 = timer7.seconds();
+  if (rank_MPI == 0){
   std::cout << "Tiempo sin Kokkos (timer7): " << time7 << " seconds" << std::endl;
-
+  }
   PetscInt Y_loc_size; 
   PetscCall(VecGetLocalSize(Y_loc, &Y_loc_size));
 
@@ -709,16 +717,18 @@ Kokkos::Timer timer5;
   Kokkos::fence();
 
   double time8 = timer8.seconds();
+  if (rank_MPI == 0){
   std::cout << "Tiempo con Kokkos (timer8): " << time8 << " seconds" << std::endl;
-
+  }
 // n_mechanical_sites_local
   double sum_host = 0.0;
 for (size_t i = 0; i < (size_t)10; i++) {
   sum_host += Y_loc_ptr[i];
 }
 double mean_host = sum_host / 10;
+if (rank_MPI == 0){
 std::cout << "Media (host, Y_loc_ptr): " << mean_host << std::endl;
-
+}
 double sum_device = 0.0;
 Kokkos::parallel_reduce("SumY_loc", Kokkos::RangePolicy<DefaultExecSpace>(0, 10),
   KOKKOS_LAMBDA(const size_t i, double &localSum) {
@@ -727,8 +737,10 @@ Kokkos::parallel_reduce("SumY_loc", Kokkos::RangePolicy<DefaultExecSpace>(0, 10)
 
   double mean_device = sum_device / 10;
   Kokkos::fence();
-  Kokkos::printf("Media (device, Y_loc_view_device): %f\n", mean_device);
 
+  if (rank_MPI == 0){
+  Kokkos::printf("Media (device, Y_loc_view_device): %f\n", mean_device);
+  }
     //! Migrate ghost field (energy density)
     //    PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
     //                                       &idx_q_ptr[n_sites_local],
