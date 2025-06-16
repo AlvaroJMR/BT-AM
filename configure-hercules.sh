@@ -17,7 +17,7 @@ module load GCC/12.3.0
 
 module load Eigen/3.4.0-GCCcore-12.3.0
 
-module load PETSc/3.21.6-foss-2023a
+module load PETSc/3.23.2-kokkos-2025
 
 ## Export variables
 export PKG_CONFIG_PATH=$PETSC_DIR/lib/pkgconfig
@@ -39,10 +39,12 @@ if [ -f "$FILE" ]; then
     ${MAKE} -k
 else 
     cmake .. \
-    -DCMAKE_BUILD_TYPE="Release" \
-    -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
-    -G "${PLATFORM}"    
+     -DCMAKE_BUILD_TYPE="Release" \
+     -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
+     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+     -DUSE_KOKKOS=ON \
+     -G "${PLATFORM}"
+    
 fi
 
 if [[ "$PLATFORM" == "Unix Makefiles" ]]
