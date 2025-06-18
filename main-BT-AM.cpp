@@ -296,6 +296,7 @@ int main(int argc, char **argv) {
   PetscBarrier((PetscObject)NULL);
   double time = timer.seconds();
   if (rank_MPI == 0){
+  std::cout << "Kokkos backend: " << Kokkos::DefaultExecutionSpace::name() << std::endl;
   std::cout << "Tiempo que ha tardado en las operaciones con Kokkos: " << time << " seconds" << std::endl;
   std::cout << "Tiempo que ha tardado en las operaciones sin Kokkos: " << time2 << " seconds" << std::endl;
   }
@@ -322,6 +323,18 @@ auto mf_rho_Mirrow = Kokkos::create_mirror_view(mf_rho_Default);
 Kokkos::deep_copy(mf_rho_Mirrow, mf_rho_Default);
 
 Eigen::Map<VectorType> mf_rho_test(mf_rho_Mirrow.data(), n_sites_local_ghosted);
+
+
+double eigen_mean_loc = mf_rho.mean();
+double eigen_mean_sum = 0.0;
+double eigen_mean_all = 0.0;
+
+MPI_Allreduce(&eigen_mean_loc, &eigen_mean_sum, 1, MPIU_SCALAR, MPIU_SUM, PETSC_COMM_WORLD);
+eigen_mean_all = eigen_mean_sum / static_cast<double>(size_MPI);
+
+if (rank_MPI == 0) {
+  std::cout << "Media global de la densidad de energia = " << eigen_mean_all << std::endl;
+}
 
 //// 
 /* double local_sum = mf_rho.sum();              
