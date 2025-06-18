@@ -374,7 +374,7 @@ site_u, mean_q, xi, mf_rho, specie_ptr, atom_topology[site_u]);
 
 //! @brief Update local contribution of the residual equation
 V_local += V_u;
-}
+} 
 if (rank_MPI == 0) {
 std::cout << "Acabe potencial sin Kokkos: " << V_local << std::endl;
 }
@@ -391,7 +391,7 @@ Kokkos::parallel_reduce(
             site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, mf_rho_Default, 
             atomSpecie_Kokkos_Default, atomTopologyKokkos_Kokkos_Default(site_u), devSnapUM, mean_q_ij1);
     },
-    V_local_Kokkos);  
+    V_local_Kokkos);
 
   if (rank_MPI == 0){  
     std::cout << "Acabe potencial en Kokkos: " << V_local_Kokkos << std::endl;
@@ -493,7 +493,7 @@ Eigen::Map<VectorType> gamma(gamma_ptr, n_sites_local_ghosted);
 Kokkos::Timer timer5;
 
 #pragma omp parallel for reduction(+ : L0_local) schedule(runtime)
-  for (PetscInt site_u = 0; site_u < 100; site_u++) {
+  for (PetscInt site_u = 0; site_u < n_sites_local; site_u++) {
 
     //! @brief Evaluate the free entropy at site u
     double S0_u = evaluate_S0_i_adp_MgHx(
@@ -525,11 +525,13 @@ Kokkos::Timer timer5;
   Kokkos::deep_copy(element_mass_Device, element_mass_Host);
 
   double L0_Local_Kokkos = 0.0;
-
+  //PetscLogEvent  myWorkEvent;
+  //PetscLogEventRegister("EvaluateFreeEntropy", PETSC_VIEWER_CLASSID, &myWorkEvent);
+  //PetscLogEventBegin(myWorkEvent, 0,0,0,0);
   Kokkos::Timer timer6;
   Kokkos::parallel_reduce(
       "EvaluateFreeEntropy", 
-      Kokkos::RangePolicy<DefaultExecSpace>(0, 100),
+      Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
       KOKKOS_LAMBDA(const PetscInt site_u, double& local_entropy) {
 
         auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
@@ -543,7 +545,7 @@ Kokkos::Timer timer5;
           local_entropy += k_B * S0_u;
       },
       L0_Local_Kokkos);
-
+  //PetscLogEventEnd(myWorkEvent,   0,0,0,0);
   double time6 = timer6.seconds();
   if (rank_MPI == 0){
   std::cout << "Tiempo con Kokkos (timer6): " << time6 << " seconds" << std::endl;
@@ -661,8 +663,6 @@ Kokkos::Timer timer5;
   PetscScalar_Vector_Default Y_loc_view_device("Y_loc_view_device", static_cast<size_t>(Y_loc_size));
   Kokkos::deep_copy(Y_loc_view_device, Y_loc_view);
 
-  PetscScalar_Vector_Default dV_dq_u_Kokkos("dV_dq_u_Kokkos", 3);
-  Kokkos::deep_copy(dV_dq_u_Kokkos, 0.0); 
 
   ThreeD_Double_View aux_view("aux_view", 3, 11, n_mechanical_sites_local);
   Kokkos::deep_copy(aux_view, 0.0);
@@ -679,7 +679,7 @@ Kokkos::Timer timer5;
         // Eigen::Vector3d dV_dq_u = Eigen::Vector3d::Zero();
     
         auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
-
+        double dV_dq_u[3] = {0.0, 0.0, 0.0};
 
         //! @brief Evaluate gradient potential at site u
         {
@@ -688,9 +688,9 @@ Kokkos::Timer timer5;
                 mf_rho_Default, atomSpecie_Kokkos_Default,
                 atomTopologyKokkos_Kokkos_Default(site_u), mean_q_ij1, aux_view, devSnapUM);
 
-                dV_dq_u_Kokkos(0) += temp(0);
-                dV_dq_u_Kokkos(1) += temp(1);
-                dV_dq_u_Kokkos(2) += temp(2);
+                dV_dq_u[0] += temp(0);
+                dV_dq_u[1] += temp(1);
+                dV_dq_u[2] += temp(2);
             }
     
         //! @brief Evaluate the local gradient of V0 at the neighbors of site u
@@ -703,14 +703,14 @@ Kokkos::Timer timer5;
                 site_u, site_i, mean_q_Kokkos_Default, xi_Kokkos_Default,
                 mf_rho_Default, atomSpecie_Kokkos_Default,
                 atomTopologyKokkos_Kokkos_Default(site_i), mean_q_ij1, aux_view, devSnapUM);
-                dV_dq_u_Kokkos(0) += temp(0);
-                dV_dq_u_Kokkos(1) += temp(1);
-                dV_dq_u_Kokkos(2) += temp(2);
+                dV_dq_u[0] += temp(0);
+                dV_dq_u[1] += temp(1);
+                dV_dq_u[2] += temp(2);
             }
     
             //! Fill residual vector
         for (PetscInt alpha = 0; alpha < dim; alpha++) {
-            Y_loc_view_device(site_u * dim + alpha) = dV_dq_u_Kokkos(alpha);
+            Y_loc_view_device(site_u * dim + alpha) = dV_dq_u[alpha];
         }
     });
 

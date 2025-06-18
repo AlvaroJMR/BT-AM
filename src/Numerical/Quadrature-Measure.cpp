@@ -133,6 +133,19 @@ KOKKOS_FUNCTION void fill_out_gaussian_measure_Kokkos (double* mean_q_ij,
   ctx->xi_ij = xi_ij;
   ctx->spc = spc;
 
+    for (size_t i = 0; i < ctx->dof_table_aux.extent(0); ++i) {
+      ctx->dof_table_aux(i) = 0;
+    }
+  
+    for (size_t i = 0; i < ctx->active_dof.extent(0); ++i) {
+      ctx->active_dof(i) = 0;
+    }
+  
+    for (size_t i = 0; i < ctx->gp_board.extent(0); ++i) {
+      ctx->gp_board(i) = 0;
+    }
+  
+
   //! Copy dof table
   for (unsigned int i = 0; i < NumSites; i++) {
     for (unsigned int j = 0; j < NumSites; j++) {

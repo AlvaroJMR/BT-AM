@@ -565,7 +565,6 @@ KOKKOS_FUNCTION potential_function rho_ij_adp_MgHx_constructor() {
 KOKKOS_FUNCTION void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
   const AtomicSpecie* spc, SoADevice *soADevice) {
 
-   
   unsigned int dim = NumberDimensions;
   unsigned int i = 0, j = 1;
   double r2_ij = 0.0;
@@ -1808,19 +1807,7 @@ static void V_dipole_ij1j2(double* V_dipole_ij1j2, const double* n,
   double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
   double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
 
-  int m = static_cast<int>(norm_r_ij1 / u_ij1.dx);
-  m = min(m, u_ij1.n - 1);  // comprobation to know if m>m_max; m_max=n-1
-  double p = m * u_ij1.dx;         // x_m=m*dx
-  p = norm_r_ij1 - p;              // p=x-x_m=x-m*dx
-  p = min(p, u_ij1.dx);     // comprobation to know if p>dx
-
-
-
-  //Kokkos::printf(" Sin Kokkos:  m: %d r2_ij1 = %f r2_ij2 = %f u_ij1.dx = %f\n", m ,r2_ij1, r2_ij2, u_ij1.dx );
-
   *V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
-
-  // Kokkos::printf("Sin Kokkos dipolo = %f\n", *V_dipole_ij1j2);
 
 }
 
@@ -1873,21 +1860,9 @@ double norm_r_ij2 = sqrt(r2_ij2);
 double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
 double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
 
-  int m = static_cast<int>(norm_r_ij1 / u_ij1.dx);
-  m = min(m, u_ij1.n - 1);  // comprobation to know if m>m_max; m_max=n-1
-  double p = m * u_ij1.dx;         // x_m=m*dx
-  p = norm_r_ij1 - p;              // p=x-x_m=x-m*dx
-  p = min(p, u_ij1.dx);     // comprobation to know if p>dx
-
-/* Kokkos::printf("kokkos SPLINE (m=%d): a = %f, b = %f, c = %f, d = %f\n",
-                m, u_ij1.a_d[m], u_ij1.b_d[m], u_ij1.c_d[m], u_ij1.d_d[m]); */
-                              
-// Kokkos::printf("Kokkos m: %d r2_ij1 = %f r2_ij2 = %f u_ij1.dx = %f\n", m ,r2_ij1, r2_ij2, u_ij1.dx );
-
 *V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
 
-  // Kokkos::printf("Kokkos dipolo = %f\n", *V_dipole_ij1j2);
-}
+} // V_dipole_ij1j2_kokkos
 /********************************************************************************/
 
 static void dV_dipole_ij1j2_dq(int direction, double* dV_dipole_ij1j2_dq,
