@@ -179,7 +179,6 @@ endif()
 include_directories(BEFORE
   src/
   external/eigen3
-  /usr/lib/x86_64-linux-gnu/hdf5/serial/include
 )
 
 # Source code directories
@@ -191,7 +190,6 @@ file(GLOB_RECURSE src_src
   src/Atoms/Neighbors.cpp  
   src/Atoms/Topology.cpp 
   src/IO/dump-input.cpp
-  src/IO/hdf5-io.cpp
   src/IO/dump-output.cpp
   src/Numerical/cubic-spline.cpp
   src/Numerical/Quadrature-Measure.cpp
