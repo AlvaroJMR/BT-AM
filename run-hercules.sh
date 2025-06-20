@@ -14,10 +14,10 @@ clear
 module purge
 module load GCC/12.3.0
 module load CMake/3.26.3-GCCcore-12.3.0
-module load PETSc/3.21.6-foss-2023a
+module load PETSc/3.23.3-foss-2023a-kokkos
 
 MPI_RUN=mpiexec
-MPI_P=18
+MPI_P=${SLURM_NTASKS}
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 ${MPI_RUN} -np ${MPI_P} ./exe-BT-AM
