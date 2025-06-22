@@ -231,8 +231,8 @@ int main(int argc, char **argv) {
 
     MPI_File outputFile;
     MPI_File_open(MPI_COMM_WORLD, "Resultados.txt",
-                  MPI_MODE_CREATE | MPI_MODE_WRONLY,
-                  MPI_INFO_NULL, &outputFile);
+              MPI_MODE_CREATE | MPI_MODE_WRONLY | MPI_MODE_APPEND,
+              MPI_INFO_NULL, &outputFile);
 
     std::ostringstream out;
 

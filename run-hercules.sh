@@ -4,7 +4,7 @@
 #SBATCH --error=run-BT-AM-%j.err # Archivo de errores
 #SBATCH --partition=standard # Partición donde ejecutar el trabajo
 #SBATCH --nodes=2 # Número de nodos
-#SBATCH --ntasks=4 # Número total de procesos MPI del trabajo
+#SBATCH --ntasks=18 # Número total de procesos MPI del trabajo
 #SBATCH --cpus-per-task=10 # Número de hilos OpenMP por proceso MPI
 #SBATCH --mem-per-cpu=2G # Memoria por núcleo solicitado
 #SBATCH --time=24:00:00 # Tiempo máximo de ejecución (horas:minutos:segundos)
@@ -20,4 +20,4 @@ MPI_RUN=mpiexec
 MPI_P=${SLURM_NTASKS}
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
-${MPI_RUN} -np ${MPI_P} ./exe-BT-AM
+${MPI_RUN} -np ${MPI_P} ./exe-BT-AM -k
