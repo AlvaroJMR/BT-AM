@@ -177,7 +177,59 @@ int main(int argc, char **argv) {
                                    Simulation.mechanical_neighs_idx[site_u]));
     }
 
-    AtomTopologyKokkos* atomTopologyKokkos = convert_atomTopology_array_to_Kokkos(atom_topology,n_sites_local_ghosted);
+    //AtomTopologyKokkos* atomTopologyKokkos = convert_atomTopology_array_to_Kokkos(atom_topology,n_sites_local_ghosted);
+    // Initialize atom topology in Kokkos
+    std::vector<PetscInt> mech_neighs_ptr_Kokkos;
+    std::vector<int>      atom_topology_offsets(n_sites_local_ghosted+1);
+    std::vector<int>      numneigh_Kokkos(n_sites_local_ghosted);
+
+    atom_topology_offsets[0] = 0;
+    for(int i=0;i<n_sites_local_ghosted;++i){
+      int m = atom_topology[i].numneigh;
+      numneigh_Kokkos[i] = m;
+      mech_neighs_ptr_Kokkos.insert(
+      mech_neighs_ptr_Kokkos.end(),
+      atom_topology[i].mech_neighs_ptr,
+      atom_topology[i].mech_neighs_ptr + m
+      );
+    atom_topology_offsets[i+1] = atom_topology_offsets[i] + m;
+    }
+     
+    Int_Vector_Default mech_neighs_ptr_Kokkos_view(
+      "mech_neighs_ptr_Kokkos",
+      mech_neighs_ptr_Kokkos.size()
+    );
+
+    Int_Vector_Default atom_topology_offsets_view(
+      "atom_topology_offsets",
+      atom_topology_offsets.size()
+    );
+
+    Int_Vector_Default numneigh_Kokkos_view(
+      "numneigh_Kokkos",
+      numneigh_Kokkos.size()
+    );
+
+    {
+      auto mech_neighs_ptr_Kokkos_view_host = PetscInt_Vector_Host(
+        mech_neighs_ptr_Kokkos.data(),
+        mech_neighs_ptr_Kokkos.size()
+      );
+      Kokkos::deep_copy(mech_neighs_ptr_Kokkos_view, mech_neighs_ptr_Kokkos_view_host);
+
+      auto atom_topology_offsets_view_host = Int_Vector_Host(
+        atom_topology_offsets.data(),
+        atom_topology_offsets.size()
+      );
+      Kokkos::deep_copy(atom_topology_offsets_view, atom_topology_offsets_view_host);
+
+      auto numneigh_Kokkos_view_host = Int_Vector_Host(
+        numneigh_Kokkos.data(),
+        numneigh_Kokkos.size()
+      );
+      Kokkos::deep_copy(numneigh_Kokkos_view, numneigh_Kokkos_view_host);
+    }
+    ///////////////////////////////////////////////////////////
     //!
     IS active_mech_sites = Simulation.active_mech_sites;
     PetscInt *active_mech_sites_ptr;
@@ -229,11 +281,6 @@ int main(int argc, char **argv) {
                               (void**)&gamma_ptr));
     Eigen::Map<VectorType> gamma(gamma_ptr, n_sites_local_ghosted);
 
-    MPI_File outputFile;
-    MPI_File_open(MPI_COMM_WORLD, "Resultados.txt",
-              MPI_MODE_CREATE | MPI_MODE_WRONLY | MPI_MODE_APPEND,
-              MPI_INFO_NULL, &outputFile);
-
     std::ostringstream out;
 
 
@@ -246,7 +293,7 @@ int main(int argc, char **argv) {
           break;
       }
     }    
-    {
+    
     if (!useKokkos) { 
     Kokkos::Timer timer2;
     #pragma omp parallel for schedule(runtime)
@@ -262,10 +309,6 @@ int main(int argc, char **argv) {
     }
     double time2 = timer2.seconds();
 
-    if (rank_MPI == 0){
-      std::cout << "Tiempo que ha tardado en las operaciones sin Kokkos: " << time2 << " seconds" << std::endl;
-    }
-
     //! Migrate ghost field (energy density) sin Kokkos
 
     PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
@@ -278,24 +321,13 @@ int main(int argc, char **argv) {
     MPI_Allreduce(&eigen_mean_loc, &eigen_mean_sum, 1, MPIU_SCALAR, MPIU_SUM, PETSC_COMM_WORLD);
     eigen_mean_all = eigen_mean_sum / static_cast<double>(size_MPI);
       
-    if (rank_MPI == 0) {
-      std::cout << "Media global de la densidad de energia = " << eigen_mean_all << std::endl;
-    }
-    
+   
     double eigen_mean = mf_rho.mean();
       
     double eigen_variance = ((mf_rho.array() - eigen_mean).square().sum()) / static_cast<double>(n_sites_local_ghosted-1);
 
-    if (rank_MPI == 0){      
-      std::cout << "Eigen: Media = " << eigen_mean
-                << ", Varianza = " << eigen_variance << std::endl;
-      
-      }
-
-    out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_rho_i_adp_MgHx_kokkos: = " << time2 << " Resultados: "<< eigen_mean <<"\n";
-    std::string str = out.str();
-    MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-    out.str("");     
+    std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_rho_i_adp_MgHx_kokkos: = " << time2 << " Resultados: "<< eigen_mean << std::endl;
+    
 
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       Evaluate free entropy
@@ -315,14 +347,8 @@ int main(int argc, char **argv) {
     }
     
     double time = timer.seconds();
-    if (rank_MPI == 0) {
-      std::cout << "Acabe potencial sin Kokkos: " << V_local << std::endl;
-    }  
 
-    out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_V_i_adp_MgHx: = " << time << " Resultados: "<< V_local <<"\n";
-    str = out.str();
-    MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-    out.str("");
+    std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_V_i_adp_MgHx: = " << time << " Resultados: "<< V_local << std::endl;
 
     Kokkos::Timer timer3;
     #pragma omp parallel for schedule(runtime)
@@ -336,15 +362,8 @@ int main(int argc, char **argv) {
     double eigen_mean1 = mf_rho.mean();
     double eigen_variance1 = ((mf_rho.array() - eigen_mean1).square().sum()) / static_cast<double>(n_sites_local_ghosted - 1);
 
-    if (rank_MPI == 0){
-      std::cout << "Tiempo que ha tardado en las operaciones sin Kokkos: " << timer3.seconds() << " seconds" << std::endl;
-      std::cout << "Eigen: Media = " << eigen_mean1 << ", Varianza = " << eigen_variance1 << std::endl;  
-    }
+    std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_mf_rho_i_adp_MgHx: = " << timer3.seconds() << " Resultados: "<< eigen_mean1 << std::endl;
 
-    out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_mf_rho_i_adp_MgHx: = " << timer3.seconds() << " Resultados: "<< eigen_mean1 <<"\n";
-    str = out.str();
-    MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-    out.str("");
 
     double L0_local = 0.0;
     
@@ -363,15 +382,7 @@ int main(int argc, char **argv) {
 
     double time5 = timer5.seconds();
 
-    if (rank_MPI == 0){
-      std::cout << "Tiempo sin Kokkos (timer5): " << time5 << " seconds" << std::endl;
-      std::cout << "L0_local sin Kokkos: " << L0_local << std::endl;
-    }
-
-    out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_S0_i_adp_MgHx: = " << time5 << " Resultados: "<< L0_local <<"\n";
-    str = out.str();
-    MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-    out.str("");
+    std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_S0_i_adp_MgHx: = " << time5 << " Resultados: "<< L0_local << std::endl;
 
     Vec X_dist, X_loc;
     Vec Y_dist, Y_loc;  
@@ -474,25 +485,15 @@ int main(int argc, char **argv) {
     }
   
     double time7 = timer7.seconds();
-    if (rank_MPI == 0){
-    std::cout << "Tiempo sin Kokkos (timer7): " << time7 << " seconds" << std::endl;
-    }
-    
     double sum_host = 0.0;
     for (size_t i = 0; i < (size_t)n_mechanical_sites_local; i++) {
       sum_host += Y_loc_ptr[i];
     }
     double mean_host = sum_host / n_mechanical_sites_local;
-    if (rank_MPI == 0) {
-    std::cout << "Media (host, Y_loc_ptr): " << mean_host << std::endl;
-    }
     
-    out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_DV_i_Dq_u_adp_MgHx: = " << time7 << " Resultados: "<< mean_host <<"\n";
-    str = out.str();
-    MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-    out.str("");
+    std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos evaluate_DV_i_Dq_u_adp_MgHx: = " << time7 << " Resultados: "<< mean_host << std::endl;
 
-  } else {
+  }
 
     PetscScalar_Vector_Host mf_rho_Host(mf_rho_ptr, static_cast<size_t>(n_sites_local_ghosted));
     PetscScalar_Vector_Default mf_rho_Default("mf_rho_Default",static_cast<size_t>(n_sites_local_ghosted));
@@ -513,13 +514,9 @@ int main(int argc, char **argv) {
     PetscInt_Vector_Default active_mech_sites_Kokkos_Default("Device_mechanical_sites", static_cast<size_t>(active_mech_sites_index));
     Kokkos::deep_copy(active_mech_sites_Kokkos_Default, active_mech_sites_Kokkos_Host);
 
-    AtomTopology_Host atomTopology_Kokkos_Host(atom_topology, n_sites_local_ghosted);
-    AtomTopology_Default atomTopology_Kokkos_Default("atomTopology_Kokkos_Default",n_sites_local_ghosted);
-    Kokkos::deep_copy(atomTopology_Kokkos_Default, atomTopology_Kokkos_Host);
-
-    AtomTopologyKokkos_Host atomTopologyKokkos_Kokkos_Host(atomTopologyKokkos, n_sites_local_ghosted);
-    AtomTopologyKokkos_Default atomTopologyKokkos_Kokkos_Default("atomTopology_Kokkos_Default",n_sites_local_ghosted);
-    Kokkos::deep_copy(atomTopologyKokkos_Kokkos_Default, atomTopologyKokkos_Kokkos_Host);
+    //AtomTopologyKokkos_Host atomTopologyKokkos_Kokkos_Host(atomTopologyKokkos, n_sites_local_ghosted);
+    //AtomTopologyKokkos_Default atomTopologyKokkos_Kokkos_Default("atomTopology_Kokkos_Default",n_sites_local_ghosted);
+    //Kokkos::deep_copy(atomTopologyKokkos_Kokkos_Default, atomTopologyKokkos_Kokkos_Host);
 
     PetscInt atomSpecie_Index;
     PetscCall(DMSwarmGetLocalSize(Simulation.atomistic_data, &atomSpecie_Index));
@@ -559,20 +556,18 @@ int main(int argc, char **argv) {
         PetscInt site_u = active_mech_sites_Kokkos_Default(mech_site_u);
     
         auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all, mech_site_u, Kokkos::ALL());
+        AtomTopology topology;
+        topology.numneigh       = numneigh_Kokkos_view(site_u);
+        topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
+                                atom_topology_offsets_view(site_u);
 
          mf_rho_Default(site_u) = evaluate_rho_i_adp_MgHx_kokkos_Device(
-            site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, atomSpecie_Kokkos_Default, atomTopologyKokkos_Kokkos_Default(site_u), mean_q_ij1, devSnapUM);    
+            site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, atomSpecie_Kokkos_Default, topology, mean_q_ij1, devSnapUM);    
     });
 
   Kokkos::fence();
   PetscBarrier((PetscObject)NULL);
   double time = timer.seconds();
-  if (rank_MPI == 0){
-  std::cout << "Kokkos backend: " << Kokkos::DefaultExecutionSpace::name() << std::endl;
-  std::cout << "Tiempo que ha tardado en las operaciones con Kokkos: " << time << " seconds" << std::endl;
-  }
-
-  
 
 // Copy back to host to migrateGhostfield
 //! Migrate ghost field (energy density) con Kokkos
@@ -594,16 +589,8 @@ Eigen::Map<VectorType> mf_rho_test(mf_rho_Mirrow.data(), n_sites_local_ghosted);
 double Kokkos_mean_test = mf_rho_test.mean();
 double Kokkos_variance_test = ((mf_rho_test.array() - Kokkos_mean_test).square().sum())
                               / static_cast<double>(n_sites_local_ghosted - 1);
-if (rank_MPI == 0){
 
-std::cout << "Kokkos: Media = " << Kokkos_mean_test
-          << ", Varianza = " << Kokkos_variance_test << std::endl;
-}
-
-out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_rho_i_adp_MgHx_kokkos: = " << time << " Resultados: "<< Kokkos_mean_test <<"\n";
-std::string str = out.str();
-MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-out.str("");   
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_rho_i_adp_MgHx_kokkos: = " << time << " Resultados: "<< Kokkos_mean_test << std::endl;
   
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Evaluate free entropy
@@ -617,20 +604,17 @@ Kokkos::parallel_reduce(
     Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
     KOKKOS_LAMBDA(const PetscInt site_u, double& V_u) {
       auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
+      AtomTopology topology;
+      topology.numneigh       = numneigh_Kokkos_view(site_u);
+      topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
+                              atom_topology_offsets_view(site_u);      
         V_u += evaluate_V_i_adp_MgHx_Kokkos(
             site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, mf_rho_Default, 
-            atomSpecie_Kokkos_Default, atomTopologyKokkos_Kokkos_Default(site_u), devSnapUM, mean_q_ij1);
+            atomSpecie_Kokkos_Default, topology, devSnapUM, mean_q_ij1);
     },
     V_local_Kokkos);
 
-  if (rank_MPI == 0){  
-    std::cout << "Acabe potencial en Kokkos: " << V_local_Kokkos << std::endl;
-  }
-
-  out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_V_i_adp_MgHx: = " << timer2.seconds() << " Resultados: "<< V_local_Kokkos <<"\n";
-  str = out.str();
-  MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-  out.str("");
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_V_i_adp_MgHx: = " << timer2.seconds() << " Resultados: "<< V_local_Kokkos << std::endl;
 
   PetscScalar_Vector_Host stdv_q_ptr_Kokkos_Host(stdv_q_ptr, static_cast<size_t>(n_sites_local_ghosted));
   PetscScalar_Vector_Default stdv_q_ptr_Kokkos_Default("Device_mechanical_sites", static_cast<size_t>(n_sites_local_ghosted));
@@ -643,7 +627,7 @@ Kokkos::parallel_reduce(
     Int_Matrix_Default dof_table_view  ("dof_table",  n_sites_local, MaxNumSites * MaxNumSites);
     Int_Matrix_Default gp_board_view   ("gp_board",   n_sites_local, MaxNumSites * MaxNumSites * NumberDimensions * NumberDimensions);
     Int_Matrix_Default dof_table_aux  ("dof_table",  n_sites_local, MaxNumSites * MaxNumSites);
-    Int_Matrix_Default active_dof   ("gp_board",   n_sites_local, MaxNumSites);
+    Int_Matrix_Default active_dof   ("active_dof",   n_sites_local, MaxNumSites);
 
     gaussian_measure_ctx_Default ctx("ctx", n_sites_local);
 
@@ -659,10 +643,14 @@ Kokkos::parallel_reduce(
 
     auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, n_sites_local_u, Kokkos::ALL());
     double result = 0.0;
+    AtomTopology topology;
+    topology.numneigh       = numneigh_Kokkos_view(n_sites_local_u);
+    topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
+                            atom_topology_offsets_view(n_sites_local_u);     
     result = evaluate_mf_rho_i_adp_MgHx_Kokkos(
       n_sites_local_u, mean_q_Kokkos_Default, stdv_q_ptr_Kokkos_Default,
        xi_Kokkos_Default, atomSpecie_Kokkos_Default, 
-       atomTopologyKokkos_Kokkos_Default(n_sites_local_u), 
+       topology, 
        mean_q_ij1, devSnapUM,
       ctx(n_sites_local_u));
 
@@ -671,8 +659,6 @@ Kokkos::parallel_reduce(
 
 double Kokkos_mean_test1; 
 double Kokkos_variance_test1;
-if (rank_MPI == 0){
-std::cout << "Tiempo que ha tardado en las operaciones con Kokkos: " << timer4.seconds() << " seconds" << std::endl;
 
 auto mf_rho_Mirrow1 = Kokkos::create_mirror_view(mf_rho_Default);
 Kokkos::deep_copy(mf_rho_Mirrow1, mf_rho_Default);
@@ -683,14 +669,9 @@ Eigen::Map<VectorType> mf_rho_test1(mf_rho_Mirrow1.data(), n_sites_local_ghosted
  Kokkos_variance_test1 = ((mf_rho_test1.array() - Kokkos_mean_test1).square().sum())
                                / static_cast<double>(n_sites_local_ghosted - 1);
 
-std::cout << "Kokkos: Media = " << Kokkos_mean_test1
-          << ", Varianza = " << Kokkos_variance_test1 << std::endl;
-}
 
-  out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_mf_rho_i_adp_MgHx_Kokkos: = " << timer4.seconds() << " Resultados: "<< Kokkos_mean_test1 <<"\n";
-  str = out.str();
-  MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-  out.str("");
+
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_mf_rho_i_adp_MgHx_Kokkos: = " << timer4.seconds() << " Resultados: "<< Kokkos_mean_test1 << std::endl;
 
   PetscScalar_Vector_Host beta_ptr_Kokkos_Host(beta_ptr, static_cast<size_t>(n_sites_local_ghosted));
   PetscScalar_Vector_Default beta_ptr_Kokkos_Default("beta_ptr_Device", static_cast<size_t>(n_sites_local_ghosted));
@@ -717,11 +698,15 @@ std::cout << "Kokkos: Media = " << Kokkos_mean_test1
       KOKKOS_LAMBDA(const PetscInt site_u, double& local_entropy) {
 
         auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
+        AtomTopology topology;
+        topology.numneigh       = numneigh_Kokkos_view(site_u);
+        topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
+                                atom_topology_offsets_view(site_u); 
 
           double S0_u = evaluate_S0_i_adp_MgHx_Kokkos(
               site_u, mean_q_Kokkos_Default, stdv_q_ptr_Kokkos_Default, xi_Kokkos_Default, 
               mf_rho_Default, beta_ptr_Kokkos_Default, gamma_ptr_Kokkos_Default, atomSpecie_Kokkos_Default, 
-              atomTopologyKokkos_Kokkos_Default(site_u), mean_q_ij1, devSnapUM, element_mass_Device, ctx(site_u));
+              topology, mean_q_ij1, devSnapUM, element_mass_Device, ctx(site_u));
   
           //! @brief Update local contribution of the residual equation
           local_entropy += k_B * S0_u;
@@ -729,15 +714,7 @@ std::cout << "Kokkos: Media = " << Kokkos_mean_test1
       L0_Local_Kokkos);
   //PetscLogEventEnd(myWorkEvent,   0,0,0,0);
   double time6 = timer6.seconds();
-  if (rank_MPI == 0){
-  std::cout << "Tiempo con Kokkos (timer6): " << time6 << " seconds" << std::endl;
-  std::cout << "L0_Local_Kokkos: " << L0_Local_Kokkos << std::endl;  
-  }
-
-  out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_S0_i_adp_MgHx_Kokkos: = " << time6 << " Resultados: "<< L0_Local_Kokkos <<"\n";
-  str = out.str();
-  MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-  out.str("");
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_S0_i_adp_MgHx_Kokkos: = " << time6 << " Resultados: "<< L0_Local_Kokkos << std::endl;
 
 
   unsigned int dim = NumberDimensions;
@@ -828,12 +805,17 @@ std::cout << "Kokkos: Media = " << Kokkos_mean_test1
         auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
         double dV_dq_u[3] = {0.0, 0.0, 0.0};
 
+        AtomTopology topologySiteU;
+        topologySiteU.numneigh       = numneigh_Kokkos_view(site_u);
+        topologySiteU.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
+                                atom_topology_offsets_view(site_u); 
         //! @brief Evaluate gradient potential at site u
         {
+
           auto temp = evaluate_DV_i_Dq_u_adp_MgHx_Kokkos(
                 site_u, site_u, mean_q_Kokkos_Default, xi_Kokkos_Default,
                 mf_rho_Default, atomSpecie_Kokkos_Default,
-                atomTopologyKokkos_Kokkos_Default(site_u), mean_q_ij1, aux_view, devSnapUM);
+                topologySiteU, mean_q_ij1, aux_view, devSnapUM);
 
                 dV_dq_u[0] += temp(0);
                 dV_dq_u[1] += temp(1);
@@ -841,15 +823,18 @@ std::cout << "Kokkos: Media = " << Kokkos_mean_test1
             }
     
         //! @brief Evaluate the local gradient of V0 at the neighbors of site u
-        for (PetscInt idx_i = 0; idx_i < atomTopologyKokkos_Kokkos_Default(site_u).numneigh; idx_i++) {
+        for (PetscInt idx_i = 0; idx_i < numneigh_Kokkos_view(site_u); idx_i++) {
             //! Get index of the site i
-            PetscInt site_i = atomTopologyKokkos_Kokkos_Default(site_u).mech_neighs_ptr(idx_i);
-    
+            PetscInt site_i = topologySiteU.mech_neighs_ptr[idx_i];
+            AtomTopology topology;
+            topology.numneigh       = numneigh_Kokkos_view(site_i);
+            topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
+                                  atom_topology_offsets_view(site_i);     
             //! @brief Evaluate gradient potential at site i
             auto temp = evaluate_DV_i_Dq_u_adp_MgHx_Kokkos(
                 site_u, site_i, mean_q_Kokkos_Default, xi_Kokkos_Default,
                 mf_rho_Default, atomSpecie_Kokkos_Default,
-                atomTopologyKokkos_Kokkos_Default(site_i), mean_q_ij1, aux_view, devSnapUM);
+                topology, mean_q_ij1, aux_view, devSnapUM);
                 dV_dq_u[0] += temp(0);
                 dV_dq_u[1] += temp(1);
                 dV_dq_u[2] += temp(2);
@@ -870,19 +855,11 @@ Kokkos::parallel_reduce("SumY_loc", Kokkos::RangePolicy<DefaultExecSpace>(0, n_m
     localSum += Y_loc_view_device(i);
 }, sum_device);
 
-  double mean_device = sum_device / n_mechanical_sites_local;
   Kokkos::fence();
+  double mean_device = sum_device / n_mechanical_sites_local;
 
-if (rank_MPI == 0){
-  Kokkos::printf("Tiempo con Kokkos (timer8): %f seconds \n" , time8);
-  Kokkos::printf("Media (device, Y_loc_view_device): %f\n", mean_device);
-}
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_DV_i_Dq_u_adp_MgHx_Kokkos: = " << time8 << " Resultados: "<< mean_device << std::endl;
 
-  out << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos evaluate_DV_i_Dq_u_adp_MgHx_Kokkos: = " << time8 << " Resultados: "<< mean_device <<"\n";
-  str = out.str();
-  MPI_File_write_ordered(outputFile, str.c_str(), str.size(), MPI_CHAR, MPI_STATUS_IGNORE);
-  out.str("");
-}
     //! Migrate ghost field (energy density)
     //    PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
     //                                       &idx_q_ptr[n_sites_local],
@@ -965,19 +942,26 @@ if (rank_MPI == 0){
     PetscCall(destroy_DMD_simulation(&Simulation));
 
     //! @brief Destroy ADP context
+    std::cout << "Restaurando" << std::endl;
     limpiarADPPotencial(adp_MgMg);
     limpiarADPPotencial(adp_HH);
     limpiarADPPotencial(adp_MgH);
+    ctx = gaussian_measure_ctx_Default();
+    devSnap = DevSnap();
+    clearSoA_ADP(H);
+
+    // clearTopology(atomTopologyKokkos_Kokkos_Host, atomTopologyKokkos_Kokkos_Default);
     // Finalize PETSc
+    std::cout << "Finalize PETSC" << std::endl;
     PetscFinalize();
     // Finalize MPI
-#ifdef USE_MPI
+  #ifdef USE_MPI
     MPI_Finalize();
-#endif
-  }
-    Kokkos::finalize();
+  #endif
   }
 
+    Kokkos::finalize();
+    std::cout << "Finalize Kokkos for real" << std::endl;
     return 0;
   } catch (std::exception &exception) {
     if (rank_MPI == 0) {

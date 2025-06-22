@@ -260,6 +260,7 @@ typedef Kokkos::View<PetscScalar*,  DefaultLayout, DefaultMemorySpace> PetscScal
 
 typedef Kokkos::View<int**, DefaultLayout, DefaultMemorySpace> Int_Matrix_Default;
 typedef Kokkos::View<int*, DefaultLayout, DefaultMemorySpace> Int_Vector_Default;
+typedef Kokkos::View<int*, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> Int_Vector_Host;
 
 typedef Kokkos::View<double**, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Matrix_Host;
 typedef Kokkos::View<PetscScalar*,  DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Vector_Host;
@@ -381,24 +382,6 @@ typedef struct CubicSpline {
 
   double *x_d, *a_d, *b_d, *c_d, 
   *d_d, *db_d, *dc_d, *dd_d, *ddc_d, *ddd_d;
-  /*View_Double_Vector_Device x_d, a_d, b_d, c_d, 
-      d_d, db_d, dc_d, dd_d, ddc_d, ddd_d;
-
-
-  void allocate(int _n){
-        n = _n;
-        std::size_t N = std::size_t(n)+1;
-        x_d = View_Double_Vector_Device("spline.x",   N);
-        a_d   = View_Double_Vector_Device("spline.a",   N);
-        b_d   = View_Double_Vector_Device("spline.b",   N);
-        c_d   = View_Double_Vector_Device("spline.c",   N);
-        d_d   = View_Double_Vector_Device("spline.d",   N);
-        db_d  = View_Double_Vector_Device("spline.db",  N);
-        dc_d  = View_Double_Vector_Device("spline.dc",  N);
-        dd_d  = View_Double_Vector_Device("spline.dd",  N);
-        ddc_d = View_Double_Vector_Device("spline.ddc", N);
-        ddd_d = View_Double_Vector_Device("spline.ddd", N);
-      } */
 
   #endif
 

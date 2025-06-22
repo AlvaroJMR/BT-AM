@@ -113,7 +113,7 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
   const PetscScalar_Matrix_Default  &mean_q,
   const PetscScalar_Vector_Default &xi,
   const AtomSpecie_Default &specie,
-  const AtomTopologyKokkos atom_topology_i,
+  const AtomTopology atom_topology_i,
   const View_Double_Vector_Device mean_q_ij1,
   const DevSnapUnmanaged &soADevice) {
   
@@ -123,7 +123,7 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
 
   //! @brief Get topologic information of site i
   unsigned int numneigh_site_i = atom_topology_i.numneigh;
-  PetscInt_Vector_Default mech_neighs_i = atom_topology_i.mech_neighs_ptr;
+  const PetscInt* mech_neighs_i = atom_topology_i.mech_neighs_ptr;
 
   //! @brief Get atomistic information of site i
   AtomicSpecie spc_i = specie(site_i);
@@ -140,7 +140,7 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
   for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
     //! @brief Get atomistic information of site j
 
-    unsigned int site_j1 = mech_neighs_i(idx_j1);
+    unsigned int site_j1 = mech_neighs_i[idx_j1];
     AtomicSpecie spc_j1 = specie(site_j1);
     double xi_j1 = xi(site_j1);
     auto mean_q_j1 = extractRowBlock(mean_q, site_j1, 0, 3);
@@ -361,7 +361,7 @@ KOKKOS_FUNCTION double evaluate_V_i_adp_MgHx_Kokkos(unsigned int site_i,        
   const PetscScalar_Vector_Default &xi,
   const PetscScalar_Vector_Default& rho,
   const AtomSpecie_Default &specie,
-  const AtomTopologyKokkos atom_topology_i,
+  const AtomTopology atom_topology_i,
   const DevSnapUnmanaged &soADevice,
   const View_Double_Vector_Device mean_q_ij1)  //!
 {
@@ -378,7 +378,7 @@ double V_i = 0.0;        //! Total potential
 
 //! @brief Get topologic information of site i
 unsigned int numneigh_site_i = atom_topology_i.numneigh;
-PetscInt_Vector_Default mech_neighs_i = atom_topology_i.mech_neighs_ptr;
+const PetscInt *mech_neighs_i = atom_topology_i.mech_neighs_ptr;
 
 //! @brief Get atomistic information of site i
 AtomicSpecie spc_i = specie(site_i);
@@ -392,7 +392,7 @@ return 0.0;
 for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
 
 //! @brief Get atomistic information of site j
-unsigned int site_j1 = mech_neighs_i(idx_j1);
+unsigned int site_j1 = mech_neighs_i[idx_j1];
 AtomicSpecie spc_j1 = specie(site_j1);
 double xi_j1 = xi(site_j1);
 auto mean_q_j1 = extractRowBlock(mean_q, site_j1, 0, 3);
@@ -422,7 +422,7 @@ V_pair_i += V_pair_ij;
 for (unsigned int idx_j2 = idx_j1; idx_j2 < numneigh_site_i; idx_j2++) {
 
 //! @brief Compute atomistic information of site j2
-unsigned int site_j2 = mech_neighs_i(idx_j2);
+unsigned int site_j2 = mech_neighs_i[idx_j2];
 AtomicSpecie spc_j2 = specie(site_j2);
 double xi_j2 = xi(site_j2);
 auto mean_q_j2 = extractRowBlock(mean_q, site_j2, 0, 3);
@@ -572,7 +572,7 @@ KOKKOS_FUNCTION double evaluate_mf_rho_i_adp_MgHx_Kokkos(unsigned int site_i,   
   const PetscScalar_Vector_Default &stdv_q,
   const PetscScalar_Vector_Default &xi,
   const AtomSpecie_Default &specie,
-  const AtomTopologyKokkos atom_topology_i,
+  const AtomTopology atom_topology_i,
   const View_Double_Vector_Device mean_q_ij1,
   const DevSnapUnmanaged &soADevice,
         gaussian_measure_ctx_kokkos &ctx
@@ -593,7 +593,7 @@ double mf_rho_i = 0.0;  //! Meanfield Energy density term
 
 //! @brief Get topologic information of site i
 unsigned int numneigh_site_i = atom_topology_i.numneigh;
-const PetscInt_Vector_Default mech_neighs_i = atom_topology_i.mech_neighs_ptr;
+const PetscInt *mech_neighs_i = atom_topology_i.mech_neighs_ptr;
 
 //! @brief Get atomistic information of site i
 AtomicSpecie spc_i = specie(site_i);
@@ -863,7 +863,7 @@ KOKKOS_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
   const PetscScalar_Vector_Default &beta,         //!
   const PetscScalar_Vector_Default &gamma,        //!
   const AtomSpecie_Default &specie,
-  const AtomTopologyKokkos atom_topology_i,
+  const AtomTopology atom_topology_i,
   const View_Double_Vector_Device mean_q_ij1,
   const DevSnapUnmanaged &soADevice,
   const View_Double_Vector_Device element_mass,
@@ -892,7 +892,7 @@ double V0_i = 0.0;        //! Total potential
 
 //! @brief Get topologic information of site i
 unsigned int numneigh_site_i = atom_topology_i.numneigh;
-const PetscInt_Vector_Default mech_neighs_i = atom_topology_i.mech_neighs_ptr;
+const PetscInt* mech_neighs_i = atom_topology_i.mech_neighs_ptr;
 
 //! @brief Get atomistic information of site i
 auto mean_q_i = extractRowBlock(mean_q, site_i, 0, 3);
@@ -911,7 +911,7 @@ return 0.0;
 for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
 
 //! @brief Get atomistic information of site j
-unsigned int site_j1 = mech_neighs_i(idx_j1);
+unsigned int site_j1 = mech_neighs_i[idx_j1];
 AtomicSpecie spc_j1 = specie(site_j1);
 double xi_j1 = xi(site_j1);
 double stdv_q_j1 = stdv_q(site_j1);
@@ -963,7 +963,7 @@ V0_pair_i += V0_pair_ij;
 for (unsigned int idx_j2 = idx_j1; idx_j2 < numneigh_site_i; idx_j2++) {
 
 //! @brief Compute atomistic information of site j2
-unsigned int site_j2 = mech_neighs_i(idx_j2);
+unsigned int site_j2 = mech_neighs_i[idx_j2];
 AtomicSpecie spc_j2 = specie(site_j2);
 double xi_j2 = xi(site_j2);
 double stdv_q_j2 = stdv_q(site_j2);
@@ -1271,7 +1271,7 @@ KOKKOS_FUNCTION aux_Vector evaluate_DV_i_Dq_u_adp_MgHx_Kokkos(
   const PetscScalar_Vector_Default &xi,           //! Molar fraction
   const PetscScalar_Vector_Default &mf_rho,          //! Energy density
   const AtomSpecie_Default &specie,          //! Atom
-  const AtomTopologyKokkos atom_topology_i,
+  const AtomTopology atom_topology_i,
   const View_Double_Vector_Device mean_q_ij1, 
   const ThreeD_Double_View aux_view,
   const DevSnapUnmanaged &soADevice)  //!
@@ -1314,7 +1314,7 @@ D_V_i_pair_Dq(2) = 0.0;
 
 //! @brief Get topologic information of site i
 unsigned int numneigh_site_i = atom_topology_i.numneigh;
-const PetscInt_Vector_Default mech_neighs_i = atom_topology_i.mech_neighs_ptr;
+const PetscInt *mech_neighs_i = atom_topology_i.mech_neighs_ptr;
 
 //! @brief Get atomistic information of site i
 AtomicSpecie spc_i = specie(site_i);
@@ -1333,7 +1333,7 @@ if ((spc_i == H) && (xi_i < min_occupancy)) {
 for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
 
   //! @brief Get atomistic information of site j
-  unsigned int site_j1 = mech_neighs_i(idx_j1);
+  unsigned int site_j1 = mech_neighs_i[idx_j1];
   AtomicSpecie spc_j1 = specie(site_j1);
   double xi_j1 = xi(site_j1);
   auto mean_q_j1 = extractRowBlock(mean_q, site_j1, 0, 3);
@@ -1383,7 +1383,7 @@ for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
     for (unsigned int idx_j2 = 0; idx_j2 < numneigh_site_i; idx_j2++) {
 
       //! @brief Compute atomistic information of site j2
-      unsigned int site_j2 = mech_neighs_i(idx_j2);
+      unsigned int site_j2 = mech_neighs_i[idx_j2];
       AtomicSpecie spc_j2 = specie(site_j2);
       double xi_j2 = xi(site_j2);
       auto mean_q_j2 = extractRowBlock(mean_q, site_j2, 0, 3);

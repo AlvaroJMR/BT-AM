@@ -32,7 +32,7 @@ KOKKOS_FUNCTION double evaluate_rho_i_adp_MgHx_kokkos_Device(unsigned int site_i
     const PetscScalar_Matrix_Default  &mean_q,
     const PetscScalar_Vector_Default &xi,
     const AtomSpecie_Default &specie,
-    const AtomTopologyKokkos atom_topology_i,
+    const AtomTopology atom_topology_i,
     const View_Double_Vector_Device mean_q_ij1,
     const DevSnapUnmanaged &soADevice);
 
@@ -54,7 +54,7 @@ KOKKOS_FUNCTION double evaluate_V_i_adp_MgHx_Kokkos(unsigned int site_i,        
     const PetscScalar_Vector_Default &xi,
     const PetscScalar_Vector_Default& rho,
     const AtomSpecie_Default &specie,
-    const AtomTopologyKokkos atom_topology_i,
+    const AtomTopology atom_topology_i,
     const DevSnapUnmanaged &soADevice,
     const View_Double_Vector_Device mean_q_ij1);
       
@@ -71,7 +71,7 @@ KOKKOS_FUNCTION double evaluate_mf_rho_i_adp_MgHx_Kokkos(unsigned int site_i,   
   const PetscScalar_Vector_Default &stdv_q,
   const PetscScalar_Vector_Default &xi,
   const AtomSpecie_Default &specie,
-  const AtomTopologyKokkos atom_topology_i,
+  const AtomTopology atom_topology_i,
   const View_Double_Vector_Device mean_q_ij1,
   const DevSnapUnmanaged &soADevice,
         gaussian_measure_ctx_kokkos &ctx
@@ -96,7 +96,7 @@ KOKKOS_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
     const PetscScalar_Vector_Default &beta,         //!
     const PetscScalar_Vector_Default &gamma,        //!
     const AtomSpecie_Default &specie,
-    const AtomTopologyKokkos atom_topology_i,
+    const AtomTopology atom_topology_i,
     const View_Double_Vector_Device mean_q_ij1,
     const DevSnapUnmanaged &soADevice,
     const View_Double_Vector_Device element_mass,
@@ -118,7 +118,7 @@ KOKKOS_FUNCTION aux_Vector evaluate_DV_i_Dq_u_adp_MgHx_Kokkos(
     const PetscScalar_Vector_Default &xi,           //! Molar fraction
     const PetscScalar_Vector_Default &mf_rho,          //! Energy density
     const AtomSpecie_Default &specie,          //! Atom
-    const AtomTopologyKokkos atom_topology_i,
+    const AtomTopology atom_topology_i,
     const View_Double_Vector_Device mean_q_ij1, 
     const ThreeD_Double_View aux_view,
     const DevSnapUnmanaged &soADevice); 
