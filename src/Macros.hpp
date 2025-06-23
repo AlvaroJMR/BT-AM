@@ -260,6 +260,7 @@ typedef Kokkos::View<PetscScalar*,  DefaultLayout, DefaultMemorySpace> PetscScal
 
 typedef Kokkos::View<int**, DefaultLayout, DefaultMemorySpace> Int_Matrix_Default;
 typedef Kokkos::View<int*, DefaultLayout, DefaultMemorySpace> Int_Vector_Default;
+typedef Kokkos::View<int*, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> Int_Vector_Host;
 
 typedef Kokkos::View<double**, DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Matrix_Host;
 typedef Kokkos::View<PetscScalar*,  DefaultLayout, HostMemorySpace, Kokkos::MemoryUnmanaged> PetscScalar_Vector_Host;

@@ -490,45 +490,6 @@ KOKKOS_INLINE_FUNCTION void read_spline(FILE * f_adp, int index, CubicSpline des
 
 }
 
-/* KOKKOS_INLINE_FUNCTION void read_spline(FILE * f_adp,
-  int       index,
-  CubicSpline &dest)
-{
-dest.allocate(index);
-
-auto x_h   = dest.x.view_host();
-auto a_h   = dest.a.view_host();
-auto b_h   = dest.b.view_host();
-auto c_h   = dest.c.view_host();
-auto d_h   = dest.d.view_host();
-auto db_h  = dest.db.view_host();
-auto dc_h  = dest.dc.view_host();
-auto dd_h  = dest.dd.view_host();
-auto ddc_h = dest.ddc.view_host();
-auto ddd_h = dest.ddd.view_host();
-
-dest.dx = 0;  
-dest.n  = index;
-
-for (int i = 0; i < index; i++) {
-  int error = fscanf(f_adp,
-    "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n",
-    &a_h[i], &b_h[i], &c_h[i],
-    &d_h[i], &db_h[i], &dc_h[i],
-    &dd_h[i], &ddc_h[i], &ddd_h[i]);
-}
-
-dest.x .modify_host(); dest.x.sync_device();
-dest.a .modify_host(); dest.a.sync_device();
-dest.b .modify_host(); dest.b.sync_device();
-dest.c .modify_host(); dest.c.sync_device();
-dest.d .modify_host(); dest.d.sync_device();
-dest.db.modify_host(); dest.db.sync_device();
-dest.dc.modify_host(); dest.dc.sync_device();
-dest.dd.modify_host(); dest.dd.sync_device();
-dest.ddc.modify_host(); dest.ddc.sync_device();
-dest.ddd.modify_host(); dest.ddd.sync_device();
-} */
 
 inline AtomTopologyKokkos convert_single_atomTopology_to_Kokkos(const AtomTopology &atom_top) {
     AtomTopologyKokkos result;
@@ -1127,7 +1088,79 @@ void inline initGaussianContexts(
   });
 }
 
-  
+inline void clearSoA_ADP(SoA_ADP &soa) {
+  soa.n_embed   = DualView_Vector_Int();
+  soa.n_rho     = DualView_Vector_Int();
+  soa.n_pair    = DualView_Vector_Int();
+  soa.n_u       = DualView_Vector_Int();
+  soa.n_w       = DualView_Vector_Int();
+
+  soa.mass      = DualView_Vector_Double();
+  soa.radius    = DualView_Vector_Double();
+  soa.factor    = DualView_Vector_Double();
+  soa.r_cutoff  = DualView_Vector_Double();
+
+  soa.dx_embed  = DualView_Vector_Double();
+  soa.dx_rho    = DualView_Vector_Double();
+  soa.dx_pair   = DualView_Vector_Double();
+  soa.dx_u      = DualView_Vector_Double();
+  soa.dx_w      = DualView_Vector_Double();
+
+  soa.embed_x   = DualView_Vector_Double();
+  soa.embed_a   = DualView_Vector_Double();
+  soa.embed_b   = DualView_Vector_Double();
+  soa.embed_c   = DualView_Vector_Double();
+  soa.embed_d   = DualView_Vector_Double();
+  soa.embed_db  = DualView_Vector_Double();
+  soa.embed_dc  = DualView_Vector_Double();
+  soa.embed_dd  = DualView_Vector_Double();
+  soa.embed_ddc = DualView_Vector_Double();
+  soa.embed_ddd = DualView_Vector_Double();
+
+  soa.rho_x     = DualView_Vector_Double();
+  soa.rho_a     = DualView_Vector_Double();
+  soa.rho_b     = DualView_Vector_Double();
+  soa.rho_c     = DualView_Vector_Double();
+  soa.rho_d     = DualView_Vector_Double();
+  soa.rho_db    = DualView_Vector_Double();
+  soa.rho_dc    = DualView_Vector_Double();
+  soa.rho_dd    = DualView_Vector_Double();
+  soa.rho_ddc   = DualView_Vector_Double();
+  soa.rho_ddd   = DualView_Vector_Double();
+
+  soa.pair_x    = DualView_Vector_Double();
+  soa.pair_a    = DualView_Vector_Double();
+  soa.pair_b    = DualView_Vector_Double();
+  soa.pair_c    = DualView_Vector_Double();
+  soa.pair_d    = DualView_Vector_Double();
+  soa.pair_db   = DualView_Vector_Double();
+  soa.pair_dc   = DualView_Vector_Double();
+  soa.pair_dd   = DualView_Vector_Double();
+  soa.pair_ddc  = DualView_Vector_Double();
+  soa.pair_ddd  = DualView_Vector_Double();
+
+  soa.u_x       = DualView_Vector_Double();
+  soa.u_a       = DualView_Vector_Double();
+  soa.u_b       = DualView_Vector_Double();
+  soa.u_c       = DualView_Vector_Double();
+  soa.u_d       = DualView_Vector_Double();
+  soa.u_db      = DualView_Vector_Double();
+  soa.u_dc      = DualView_Vector_Double();
+  soa.u_dd      = DualView_Vector_Double();
+  soa.u_ddc     = DualView_Vector_Double();
+  soa.u_ddd     = DualView_Vector_Double();
+
+  soa.w_x       = DualView_Vector_Double();
+  soa.w_a       = DualView_Vector_Double();
+  soa.w_b       = DualView_Vector_Double();
+  soa.w_c       = DualView_Vector_Double();
+  soa.w_d       = DualView_Vector_Double();
+  soa.w_db      = DualView_Vector_Double();
+  soa.w_dc      = DualView_Vector_Double();
+  soa.w_dd      = DualView_Vector_Double();
+  soa.w_ddc     = DualView_Vector_Double();
+  soa.w_ddd     = DualView_Vector_Double();
+}  
 
 #endif 
 
