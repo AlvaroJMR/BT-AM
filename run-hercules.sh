@@ -16,6 +16,7 @@ module load GCC/12.3.0
 module load CMake/3.26.3-GCCcore-12.3.0
 module load PETSc/3.23.3-foss-2023a-kokkos
 
+export TERM=xterm
 MPI_RUN=mpiexec
 MPI_P=${SLURM_NTASKS}
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
