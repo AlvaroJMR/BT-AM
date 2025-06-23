@@ -7,7 +7,7 @@
 #SBATCH --ntasks=18 # Número total de procesos MPI del trabajo
 #SBATCH --cpus-per-task=10 # Número de hilos OpenMP por proceso MPI
 #SBATCH --mem-per-cpu=2G # Memoria por núcleo solicitado
-#SBATCH --time=24:00:00 # Tiempo máximo de ejecución (horas:minutos:segundos)
+#SBATCH --time=02:00:00 # Tiempo máximo de ejecución (horas:minutos:segundos)
 
 ## Configure environments
 clear
