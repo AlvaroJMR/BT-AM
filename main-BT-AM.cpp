@@ -550,8 +550,6 @@ Kokkos::Timer timer5;
 
   double time5 = timer5.seconds();
 
-std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos (timer5): " << time5 << " seconds:" << " L0_local sin Kokkos: " << L0_local << std::endl;
-
   PetscScalar_Vector_Host beta_ptr_Kokkos_Host(beta_ptr, static_cast<size_t>(n_sites_local_ghosted));
   PetscScalar_Vector_Default beta_ptr_Kokkos_Default("beta_ptr_Device", static_cast<size_t>(n_sites_local_ghosted));
   Kokkos::deep_copy(beta_ptr_Kokkos_Default, beta_ptr_Kokkos_Host);
@@ -593,8 +591,8 @@ std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos (timer5): " << time5 <<
   //PetscLogEventEnd(myWorkEvent,   0,0,0,0);
   double time6 = timer6.seconds();
 
-  std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos: evaluate_S0_i_adp_MgHx " << time5 << " seconds" << "L0_local sin Kokkos: " << L0_local << std::endl;
-  std::cout << "Rank " << rank_MPI << ": Tiempo con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time6 << " seconds" << "L0_local con Kokkos: " << L0_Local_Kokkos << std::endl;
+  std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos: evaluate_S0_i_adp_MgHx " << time5 << " seconds" << " L0_local sin Kokkos: " << L0_local << std::endl;
+  std::cout << "Rank " << rank_MPI << ": Tiempo con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time6 << " seconds" << " L0_local con Kokkos: " << L0_Local_Kokkos << std::endl;
 
   
   unsigned int dim = NumberDimensions;
@@ -689,10 +687,10 @@ std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos (timer5): " << time5 <<
         //! @brief Evaluate gradient potential at site i
         dV_dq_u += evaluate_DV_i_Dq_u_adp_MgHx(site_u, site_i, mean_q, xi,
                                                       mf_rho, specie_ptr,
-                                                      atom_topology[site_i]);
+                                                      atom_topology[site_i]);                                          
         }
-    
-        //! Fill residual vector
+
+            //! Fill residual vector
     for (PetscInt alpha = 0; alpha < dim; alpha++) {
         Y_loc_ptr[site_u * dim + alpha] = dV_dq_u(alpha);
     }
@@ -710,6 +708,10 @@ std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos (timer5): " << time5 <<
 
   ThreeD_Double_View aux_view("aux_view", 3, 11, n_mechanical_sites_local);
   Kokkos::deep_copy(aux_view, 0.0);
+
+PetscScalar_Vector_Host mf_rho_Host(mf_rho_ptr, static_cast<size_t>(n_sites_local_ghosted));
+PetscScalar_Vector_Default mf_rho_Default1("mf_rho_Default1", static_cast<size_t>(n_sites_local_ghosted));
+Kokkos::deep_copy(mf_rho_Default1, mf_rho_Host);
       
   Kokkos::Timer timer8;
   Kokkos::parallel_for(
@@ -734,7 +736,7 @@ std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos (timer5): " << time5 <<
         {
           auto temp = evaluate_DV_i_Dq_u_adp_MgHx_Kokkos(
                 site_u, site_u, mean_q_Kokkos_Default, xi_Kokkos_Default,
-                mf_rho_Default, atomSpecie_Kokkos_Default,
+                mf_rho_Default1, atomSpecie_Kokkos_Default,
                 topologySiteU, mean_q_ij1, aux_view, devSnapUM);
 
                 dV_dq_u[0] += temp(0);
@@ -752,7 +754,7 @@ std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos (timer5): " << time5 <<
             //! @brief Evaluate gradient potential at site i
             auto temp = evaluate_DV_i_Dq_u_adp_MgHx_Kokkos(
                 site_u, site_i, mean_q_Kokkos_Default, xi_Kokkos_Default,
-                mf_rho_Default, atomSpecie_Kokkos_Default,
+                mf_rho_Default1, atomSpecie_Kokkos_Default,
                 topology, mean_q_ij1, aux_view, devSnapUM);
                 dV_dq_u[0] += temp(0);
                 dV_dq_u[1] += temp(1);
