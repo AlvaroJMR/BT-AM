@@ -4,8 +4,8 @@
 #SBATCH --error=run-BT-AM-%j.err # Archivo de errores
 #SBATCH --partition=standard # Partición donde ejecutar el trabajo
 #SBATCH --nodes=2 # Número de nodos
-#SBATCH --ntasks=18 # Número total de procesos MPI del trabajo
-#SBATCH --cpus-per-task=10 # Número de hilos OpenMP por proceso MPI
+#SBATCH --ntasks=8 # Número total de procesos MPI del trabajo
+#SBATCH --cpus-per-task=8 # Número de hilos OpenMP por proceso MPI
 #SBATCH --time=02:00:00 # Tiempo máximo de ejecución (horas:minutos:segundos)
 #SBATCH --mem=18G # Memoria total por nodo
 
