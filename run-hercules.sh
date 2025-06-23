@@ -10,15 +10,15 @@
 #SBATCH --time=02:00:00 # Tiempo máximo de ejecución (horas:minutos:segundos)
 
 ## Configure environments
-clear
 module purge
 module load GCC/12.3.0
 module load CMake/3.26.3-GCCcore-12.3.0
+module load OpenMPI/4.1.5-GCC-12.3.0
+module load Eigen/3.4.0-GCCcore-12.3.0
 module load PETSc/3.23.3-foss-2023a-kokkos
 
-export TERM=xterm
 MPI_RUN=mpiexec
 MPI_P=${SLURM_NTASKS}
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
-${MPI_RUN} -np ${MPI_P} ./exe-BT-AM
+srun --mpi=pmix ./exe-BT-AM
