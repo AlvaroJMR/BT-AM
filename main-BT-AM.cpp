@@ -396,8 +396,8 @@ double Kokkos_mean_test = mf_rho_test.mean();
 double Kokkos_variance_test = ((mf_rho_test.array() - Kokkos_mean_test).square().sum())
                               / static_cast<double>(n_sites_local_ghosted - 1);
 
-std::cout << "Rank " << rank_MPI << ":Tiempo que ha tardado en las operaciones con Kokkos: evaluate_rho_i_adp_MgHx_kokkos_Device " << time << " seconds" << " Media:"<< eigen_mean << std::endl;
-std::cout << "Rank " << rank_MPI << ":Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_rho_i_adp_MgHx " << time2 << " seconds" << " Media:" << Kokkos_mean_test << std::endl;          
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_rho_i_adp_MgHx_kokkos_Device " << time << " segundos" << " Resultados: " << eigen_mean << std::endl;
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_rho_i_adp_MgHx " << time2 << " segundos" << " Resultados: " << Kokkos_mean_test << std::endl;          
   
   // PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "idx", NULL, NULL, (void**)&idx_q_ptr));
   
@@ -419,7 +419,6 @@ site_u, mean_q, xi, mf_rho, specie_ptr, atom_topology[site_u]);
 V_local += V_u;
 } 
 
-std::cout << "Rank " << rank_MPI << ":Acabe potencial sin Kokkos: evaluate_V_i_adp_MgHx " << V_local << " Segundos: " << timer9.seconds() << std::endl;
 
 double V_local_Kokkos = 0.0;
 View_Double_Matrix_Device mean_q_ij1_all_n_local("mean_q_ij1_all", n_sites_local, 6);
@@ -440,8 +439,8 @@ Kokkos::parallel_reduce(
     },
     V_local_Kokkos);
 
-
-std::cout << "Rank " << rank_MPI << ":Acabe potencial en Kokkos: evaluate_V_i_adp_MgHx_Kokkos " << V_local_Kokkos << " Seconds: " << timer10.seconds() << std::endl;
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_V_i_adp_MgHx " << timer9.seconds() << " segundos: " << " Resultados: "<< V_local << std::endl;
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_V_i_adp_MgHx_Kokkos " << timer10.seconds() << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
 
   PetscScalar* stdv_q_ptr;
   PetscCall(DMSwarmGetField(Simulation.atomistic_data, "stdv-q", NULL, NULL,
@@ -512,8 +511,8 @@ double Kokkos_mean_test1 = mf_rho_test1.mean();
 double Kokkos_variance_test1 = ((mf_rho_test1.array() - Kokkos_mean_test1).square().sum())
                                / static_cast<double>(n_sites_local_ghosted - 1);
 
-std::cout << "Rank " << rank_MPI << ":Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_mf_rho_i_adp_MgHx " << timer3.seconds() << " seconds" << " Media: "<< eigen_mean1 << std::endl;
-std::cout << "Rank " << rank_MPI << ":Tiempo que ha tardado en las operaciones con Kokkos: evaluate_mf_rho_i_adp_MgHx_Kokkos " << timer4.seconds() << " seconds" << " Media: "<< Kokkos_mean_test1 <<std::endl;          
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_mf_rho_i_adp_MgHx " << timer3.seconds() << " seconds" << " Resultados: "<< eigen_mean1 << std::endl;
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_mf_rho_i_adp_MgHx_Kokkos " << timer4.seconds() << " seconds" << " Resultados: "<< Kokkos_mean_test1 <<std::endl;          
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Get the thermal Lagrange Multiplier (beta) vector
@@ -591,8 +590,8 @@ Kokkos::Timer timer5;
   //PetscLogEventEnd(myWorkEvent,   0,0,0,0);
   double time6 = timer6.seconds();
 
-  std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos: evaluate_S0_i_adp_MgHx " << time5 << " seconds" << " L0_local sin Kokkos: " << L0_local << std::endl;
-  std::cout << "Rank " << rank_MPI << ": Tiempo con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time6 << " seconds" << " L0_local con Kokkos: " << L0_Local_Kokkos << std::endl;
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_S0_i_adp_MgHx " << time5 << " segundos" << " Resultados: " << L0_local << std::endl;
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time6 << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
 
   
   unsigned int dim = NumberDimensions;
@@ -789,8 +788,8 @@ Kokkos::parallel_reduce("SumY_loc", Kokkos::RangePolicy<DefaultExecSpace>(0, n_m
   double mean_device = sum_device / n_mechanical_sites_local;
   Kokkos::fence();
 
-  std::cout << "Rank " << rank_MPI << ": Tiempo sin Kokkos (timer7): " << time7 << " seconds:" << " Media (host, Y_loc_ptr): " << mean_host << std::endl;
-  std::cout << "Rank " << rank_MPI << ": Tiempo con Kokkos (timer8): " << time8 << " seconds:" << " Media (device, Y_loc_view_device):" <<  mean_device << std::endl;
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: " << time7 << " segundos:" << " Resultados: " << mean_host << std::endl;
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: " << time8 << " segundos:" << " Resultados: " <<  mean_device << std::endl;
   
   // Finalize Kokkos
   limpiarADPPotencial(adp_MgMg);
