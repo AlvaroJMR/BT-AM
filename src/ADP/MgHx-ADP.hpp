@@ -19,6 +19,8 @@
 #include "Macros.hpp"
 #include "Numerical/Quadrature-Measure.hpp"
 #include "Numerical/cubic-spline.hpp"
+#include <Utils/KokkosUtils.hpp>
+
 
 enum species_comb_MgH { MgMg, HH, MgH };
 
@@ -588,17 +590,177 @@ n_{j_2}\ w_{i,j_2}\right)\ 2 |r_{i,j_1}|^2\ \text{I}\bigg) \end{split} \f]
  */
 potential_function V_quadrupole_ij1j2_adp_MgHx_constructor();
 
-KOKKOS_FUNCTION void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, SoADevice *soADevice);
+KOKKOS_INLINE_FUNCTION void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
+        const AtomicSpecie* spc, SoADevice *soADevice) {
+      
+        unsigned int dim = NumberDimensions;
+        unsigned int i = 0, j = 1;
+        double r2_ij = 0.0;
+        double r_ij[3];
+      
+        //! Set to zero the density
+        *rho_ij = 0.0;
+      
+        //! Set cubic spline to evaluate the energy density
+        CubicSpline rho_j;
+        if (spc[j] == Mg) {
+          rho_j = getSpline(AdpType::MgMg, SplineType::rho, rho_j, soADevice);
+        } else if (spc[j] == H) {
+          rho_j = getSpline(AdpType::HH, SplineType::rho, rho_j, soADevice);
+        }
+      
+        //! Compute parameters
+        for (unsigned int alpha = 0; alpha < dim; alpha++) {
+          r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+          r2_ij += dsqr(r_ij[alpha]);
+        }
+      
+        double norm_r_ij = sqrt(r2_ij);
+        double result = cubic_spline_Kokkos(&rho_j, norm_r_ij);
+        *rho_ij = n[j] * result;
+      }
+      
+      /********************************************************************************/
 
-KOKKOS_FUNCTION void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, SoADevice *soADevice);  
+KOKKOS_INLINE_FUNCTION void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
+        const AtomicSpecie* spc, SoADevice *soADevice) {
+      
+      unsigned int dim = NumberDimensions;
+      unsigned int i = 0, j = 1;
+      double r2_ij = 0.0;
+      double r_ij[3];
+      
+      //! Set to zero the pair term contribution to the energy
+      *V_pair_ij = 0.0;
+      
+      //! Set cubic spline to evaluate the pair interation curve
+      CubicSpline pair_ij;
+      if ((spc[i] == Mg) && (spc[j] == Mg)) {
+      pair_ij = getSpline(AdpType::MgMg, SplineType::pair, pair_ij, soADevice);
+      
+      } else if ((spc[i] == H) && (spc[j] == H)) {
+      pair_ij = getSpline(AdpType::HH, SplineType::pair, pair_ij, soADevice);
+      
+      } else {
+      pair_ij = getSpline(AdpType::MgH, SplineType::pair, pair_ij, soADevice);
+      
+      }
+      
+      //! Compute parameters
+      for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+      r2_ij += dsqr(r_ij[alpha]);
+      }
+      double norm_r_ij = sqrt(r2_ij);
+      
+      double nn_phi_ij1 = n[i] * n[j] * cubic_spline_Kokkos(&pair_ij, norm_r_ij);
+      
+      *V_pair_ij = 0.5 * nn_phi_ij1;
+}
+       
 
-KOKKOS_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
-  const double* q, const AtomicSpecie* spc, SoADevice *soADevice);
+KOKKOS_INLINE_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
+        const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
+      
+      unsigned int dim = NumberDimensions;
+      unsigned int i = 0, j1 = 1, j2 = 2;
+      double r2_ij1 = 0.0;
+      double r2_ij2 = 0.0;
+      double r_ij1__dot__r_ij2 = 0.0;
+      double r_ij1[3];
+      double r_ij2[3];
+      
+      //! Contribution of the dipole to the energy
+      *V_dipole_ij1j2 = 0.0;
+      
+      //! Set cubic spline to evaluate the dipole interation curve
+      CubicSpline u_ij1;
+      if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+      u_ij1 = getSpline(AdpType::MgMg, SplineType::u, u_ij1, soADevice);
+      } else if ((spc[i] == H) && (spc[j1] == H)) {
+      u_ij1 = getSpline(AdpType::HH, SplineType::u, u_ij1, soADevice);
+      } else {
+      u_ij1 = getSpline(AdpType::MgH, SplineType::u, u_ij1, soADevice);
+      }
+      
+      CubicSpline u_ij2;
+      if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+      u_ij2 = getSpline(AdpType::MgMg, SplineType::u, u_ij2, soADevice);
+      } else if ((spc[i] == H) && (spc[j2] == H)) {
+      u_ij2 = getSpline(AdpType::HH, SplineType::u, u_ij2, soADevice);
+      } else {
+      u_ij2 = getSpline(AdpType::MgH, SplineType::u, u_ij2, soADevice);
+      }
+      
+      //! Compute parameters
+      for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+      r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+      r2_ij1 += dsqr(r_ij1[alpha]);
+      r2_ij2 += dsqr(r_ij2[alpha]);
+      r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+      }
+      double norm_r_ij1 = sqrt(r2_ij1);
+      double norm_r_ij2 = sqrt(r2_ij2);
+      
+      double nn_u_ij1 = n[i] * n[j1] * cubic_spline_Kokkos(&u_ij1, norm_r_ij1);
+      double nn_u_ij2 = n[i] * n[j2] * cubic_spline_Kokkos(&u_ij2, norm_r_ij2);
+      
+      *V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
+      
+}
   
-KOKKOS_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
-  const double* q, const AtomicSpecie* spc, SoADevice *soADevice);
+KOKKOS_INLINE_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
+        const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
+      
+      unsigned int dim = NumberDimensions;
+      unsigned int i = 0, j1 = 1, j2 = 2;
+      double r2_ij1 = 0.0;
+      double r2_ij2 = 0.0;
+      double r_ij1__dot__r_ij2 = 0.0;
+      double r_ij1[3];
+      double r_ij2[3];
+      
+      //! Set to zero the Partial quadrupole contribution of the sites j and k to i
+      *V_quadrupole_ij1_ij2 = 0.0;
+      
+      //! Set cubic spline to evaluate the dipole interation curve
+      CubicSpline w_ij1;
+      if ((spc[i] == Mg) && (spc[j1] == Mg)) {
+      w_ij1 = getSpline(AdpType::MgMg, SplineType::w, w_ij1, soADevice);
+      } else if ((spc[i] == H) && (spc[j1] == H)) {
+      w_ij1 = getSpline(AdpType::HH, SplineType::w, w_ij1, soADevice);
+      } else {
+      w_ij1 = getSpline(AdpType::MgH, SplineType::w, w_ij1, soADevice);
+      }
+      
+      CubicSpline w_ij2;
+      if ((spc[i] == Mg) && (spc[j2] == Mg)) {
+      w_ij2 = getSpline(AdpType::MgMg, SplineType::w, w_ij2, soADevice);
+      } else if ((spc[i] == H) && (spc[j2] == H)) {
+      w_ij2 = getSpline(AdpType::HH, SplineType::w, w_ij2, soADevice);
+      } else {
+      w_ij2 = getSpline(AdpType::MgH, SplineType::w, w_ij2, soADevice);
+      }
+      
+      //! Compute parameters
+      for (unsigned int alpha = 0; alpha < dim; alpha++) {
+      r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
+      r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
+      r2_ij1 += dsqr(r_ij1[alpha]);
+      r2_ij2 += dsqr(r_ij2[alpha]);
+      r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
+      }
+      double norm_r_ij1 = sqrt(r2_ij1);
+      double norm_r_ij2 = sqrt(r2_ij2);
+      
+      double nn_w_ij1 = n[i] * n[j1] * cubic_spline_Kokkos(&w_ij1, norm_r_ij1);
+      double nn_w_ij2 = n[i] * n[j2] * cubic_spline_Kokkos(&w_ij2, norm_r_ij2);
+      
+      *V_quadrupole_ij1_ij2 =
+      (1.0 / 2.0) * nn_w_ij1 * nn_w_ij2 * dsqr(r_ij1__dot__r_ij2) -
+      (1.0 / 6.0) * nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2;
+}
   
 KOKKOS_FUNCTION void d2_rho_ij_dq2_FD_Kokkos(int direction, double* d2_rho_ij_dq,
                              const double* n, const double* q,
@@ -635,8 +797,60 @@ KOKKOS_FUNCTION void dV2_quadrupole_ij1j2_dq2_Kokkos(int direction,
                                      const AtomicSpecie* spc,
                                      SoADevice *soADevice);                        
   
-KOKKOS_FUNCTION void d_rho_ij_dq_kokkos(int direction, aux_Vector d_rho_ij_dq_view, const double* n,
-  const double* q, const AtomicSpecie* spc, const SoADevice *soADevice);
+KOKKOS_INLINE_FUNCTION void d_rho_ij_dq_kokkos(int direction, aux_Vector d_rho_ij_dq_view, const double* n,
+  const double* q, const AtomicSpecie* spc, const SoADevice *soADevice) {
+
+unsigned int dim = NumberDimensions;
+unsigned int i = 0, j = 1;
+double r2_ij = 0.0;
+double r_ij[3];
+
+//! Set d_rho_ij_dq to zero
+for (unsigned int dof = 0; dof < 3; dof++) {
+d_rho_ij_dq_view(dof) = 0.0;
+}
+
+//! Set cubic spline to evaluate the energy density
+CubicSpline rho_j;
+if (spc[j] == Mg) {
+  rho_j = getSpline(AdpType::MgMg, SplineType::rho, rho_j, soADevice);
+} else if (spc[j] == H) {
+  rho_j = getSpline(AdpType::HH, SplineType::rho, rho_j, soADevice);
+}
+
+//! Compute parameters
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
+r2_ij += dsqr(r_ij[alpha]);
+}
+
+
+if(r2_ij == 0.0){
+  return;
+}
+
+double norm_r_ij = sqrt(r2_ij);
+double norm_r_ij_m1 = 1.0 / norm_r_ij;
+
+double n_d_rho_ij = n[j] * d_cubic_spline(&rho_j, norm_r_ij);
+
+
+//! Direction i
+if (direction == 0) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+d_rho_ij_dq_view(alpha) = n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
+}
+}
+
+//! Direction j
+if (direction == 1) {
+for (unsigned int alpha = 0; alpha < dim; alpha++) {
+d_rho_ij_dq_view(alpha) = -n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
+}
+}
+}
+
+/********************************************************************************/
   
 KOKKOS_FUNCTION void dV_pair_ij_dq_kokkos(int direction, aux_Vector dV_pair_ij_dq_view, const double* n,
   const double* q, const AtomicSpecie* spc, const SoADevice *soADevice);  

@@ -452,33 +452,21 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
 
     init_spline(&adp->rho, adp->n_rho, dr_rho);
 
-    #if defined(USE_KOKKOS)
-
-    read_spline(f_adp, adp->n_rho, adp->rho );
-
-    #else
     for (i = 0; i < adp->n_rho; i++) {
       error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                      &adp->rho.a[i], &adp->rho.b[i], &adp->rho.c[i],
                      &adp->rho.d[i], &adp->rho.db[i], &adp->rho.dc[i],
                      &adp->rho.dd[i], &adp->rho.ddc[i], &adp->rho.ddd[i]);
     }
-    #endif
     error = fscanf(f_adp, "%d %lf \n", &adp->n_embed, &drho_embed);
     init_spline(&adp->embed, adp->n_embed, drho_embed);
 
-    #if defined(USE_KOKKOS)
-
-    read_spline(f_adp, adp->n_embed, adp->embed );
-    
-    #else
     for (i = 0; i < adp->n_embed; i++) {
       error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                      &adp->embed.a[i], &adp->embed.b[i], &adp->embed.c[i],
                      &adp->embed.d[i], &adp->embed.db[i], &adp->embed.dc[i],
                      &adp->embed.dd[i], &adp->embed.ddc[i], &adp->embed.ddd[i]);
     }
-    #endif
   } else {
     error = fscanf(f_adp, "%lf \n",
                    &adp->r_cutoff);  // the r_cutoff is useless here, we read it
@@ -491,54 +479,39 @@ int init_adp_MgHx(adpPotential* adp, species_comb_MgH adp_material,
   error = fscanf(f_adp, "%d %lf \n", &adp->n_pair, &dr_pair);
   init_spline(&adp->pair, adp->n_pair, dr_pair);
 
-  #if defined(USE_KOKKOS)
-
-  read_spline(f_adp, adp->n_pair, adp->pair );
-  
-  #else
   for (i = 0; i < adp->n_pair; i++) {
     error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                    &adp->pair.a[i], &adp->pair.b[i], &adp->pair.c[i],
                    &adp->pair.d[i], &adp->pair.db[i], &adp->pair.dc[i],
                    &adp->pair.dd[i], &adp->pair.ddc[i], &adp->pair.ddd[i]);
   }
-  #endif
   //! @brief Read spline for the dipole function u
   error = fscanf(f_adp, "%d %lf \n", &adp->n_u, &dr_u);
   init_spline(&adp->u, adp->n_u, dr_u);
 
-  #if defined(USE_KOKKOS)
-
-  read_spline(f_adp, adp->n_u, adp->u );
-  
-  #else
   for (i = 0; i < adp->n_u; i++) {
     error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                    &adp->u.a[i], &adp->u.b[i], &adp->u.c[i], &adp->u.d[i],  //!
                    &adp->u.db[i], &adp->u.dc[i], &adp->u.dd[i],             //!
                    &adp->u.ddc[i], &adp->u.ddd[i]);                         //!
   }
-  #endif
+
   //! @brief Read spline for the quadrupole function w
   error = fscanf(f_adp, "%d %lf \n", &adp->n_w, &dr_w);
   init_spline(&adp->w, adp->n_w, dr_w);
 
-  #if defined(USE_KOKKOS)
-
-  read_spline(f_adp, adp->n_w, adp->w );
-  
-  #else
   for (i = 0; i < adp->n_w; i++) {
     error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
                    &adp->w.a[i], &adp->w.b[i], &adp->w.c[i], &adp->w.d[i],  //!
                    &adp->w.db[i], &adp->w.dc[i], &adp->w.dd[i],             //!
                    &adp->w.ddc[i], &adp->w.ddd[i]);                         //!
   }
-  #endif
   fclose(f_adp);
 
   return EXIT_SUCCESS;
 }
+
+void destroy_adp_MgHx(adpPotential* adp) { destroy_spline(&adp->rho); }
 
 /********************************************************************************/
 
@@ -562,37 +535,6 @@ KOKKOS_FUNCTION potential_function rho_ij_adp_MgHx_constructor() {
 
 /********************************************************************************/
 
-KOKKOS_FUNCTION void rho_ij_kokkos(double* rho_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, SoADevice *soADevice) {
-
-  unsigned int dim = NumberDimensions;
-  unsigned int i = 0, j = 1;
-  double r2_ij = 0.0;
-  double r_ij[3];
-
-  //! Set to zero the density
-  *rho_ij = 0.0;
-
-  //! Set cubic spline to evaluate the energy density
-  CubicSpline rho_j;
-  if (spc[j] == Mg) {
-    rho_j = getSpline(AdpType::MgMg, SplineType::rho, rho_j, soADevice);
-  } else if (spc[j] == H) {
-    rho_j = getSpline(AdpType::HH, SplineType::rho, rho_j, soADevice);
-  }
-
-  //! Compute parameters
-  for (unsigned int alpha = 0; alpha < dim; alpha++) {
-    r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
-    r2_ij += dsqr(r_ij[alpha]);
-  }
-
-  double norm_r_ij = sqrt(r2_ij);
-  double result = cubic_spline(&rho_j, norm_r_ij);
-  *rho_ij = n[j] * result;
-}
-
-/********************************************************************************/
  static void rho_ij(double* rho_ij, const double* n, const double* q,
   const AtomicSpecie* spc) {
 
@@ -671,61 +613,6 @@ static void d_rho_ij_dq(int direction, double* d_rho_ij_dq, const double* n,
       d_rho_ij_dq[alpha] = -n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
     }
   }
-}
-
-/********************************************************************************/
-
-KOKKOS_FUNCTION void d_rho_ij_dq_kokkos(int direction, aux_Vector d_rho_ij_dq_view, const double* n,
-  const double* q, const AtomicSpecie* spc, const SoADevice *soADevice) {
-
-unsigned int dim = NumberDimensions;
-unsigned int i = 0, j = 1;
-double r2_ij = 0.0;
-double r_ij[3];
-
-//! Set d_rho_ij_dq to zero
-for (unsigned int dof = 0; dof < 3; dof++) {
-d_rho_ij_dq_view(dof) = 0.0;
-}
-
-//! Set cubic spline to evaluate the energy density
-CubicSpline rho_j;
-if (spc[j] == Mg) {
-  rho_j = getSpline(AdpType::MgMg, SplineType::rho, rho_j, soADevice);
-} else if (spc[j] == H) {
-  rho_j = getSpline(AdpType::HH, SplineType::rho, rho_j, soADevice);
-}
-
-//! Compute parameters
-for (unsigned int alpha = 0; alpha < dim; alpha++) {
-r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
-r2_ij += dsqr(r_ij[alpha]);
-}
-
-
-if(r2_ij == 0.0){
-  return;
-}
-
-double norm_r_ij = sqrt(r2_ij);
-double norm_r_ij_m1 = 1.0 / norm_r_ij;
-
-double n_d_rho_ij = n[j] * d_cubic_spline(&rho_j, norm_r_ij);
-
-
-//! Direction i
-if (direction == 0) {
-for (unsigned int alpha = 0; alpha < dim; alpha++) {
-d_rho_ij_dq_view(alpha) = n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
-}
-}
-
-//! Direction j
-if (direction == 1) {
-for (unsigned int alpha = 0; alpha < dim; alpha++) {
-d_rho_ij_dq_view(alpha) = -n_d_rho_ij * norm_r_ij_m1 * r_ij[alpha];
-}
-}
 }
 
 /********************************************************************************/
@@ -1175,42 +1062,6 @@ static void V_pair_ij(double* V_pair_ij, const double* n, const double* q,
   double nn_phi_ij1 = n[i] * n[j] * cubic_spline(&pair_ij, norm_r_ij);
 
   *V_pair_ij = 0.5 * nn_phi_ij1;
-}
-
-KOKKOS_FUNCTION void V_pair_ij_kokkos(double* V_pair_ij, const double* n, const double* q,
-  const AtomicSpecie* spc, SoADevice *soADevice) {
-
-unsigned int dim = NumberDimensions;
-unsigned int i = 0, j = 1;
-double r2_ij = 0.0;
-double r_ij[3];
-
-//! Set to zero the pair term contribution to the energy
-*V_pair_ij = 0.0;
-
-//! Set cubic spline to evaluate the pair interation curve
-CubicSpline pair_ij;
-if ((spc[i] == Mg) && (spc[j] == Mg)) {
-pair_ij = getSpline(AdpType::MgMg, SplineType::pair, pair_ij, soADevice);
-
-} else if ((spc[i] == H) && (spc[j] == H)) {
-pair_ij = getSpline(AdpType::HH, SplineType::pair, pair_ij, soADevice);
-
-} else {
-pair_ij = getSpline(AdpType::MgH, SplineType::pair, pair_ij, soADevice);
-
-}
-
-//! Compute parameters
-for (unsigned int alpha = 0; alpha < dim; alpha++) {
-r_ij[alpha] = q[dim * i + alpha] - q[dim * j + alpha];
-r2_ij += dsqr(r_ij[alpha]);
-}
-double norm_r_ij = sqrt(r2_ij);
-
-double nn_phi_ij1 = n[i] * n[j] * cubic_spline(&pair_ij, norm_r_ij);
-
-*V_pair_ij = 0.5 * nn_phi_ij1;
 }
 
 /********************************************************************************/
@@ -1811,58 +1662,6 @@ static void V_dipole_ij1j2(double* V_dipole_ij1j2, const double* n,
 
 }
 
-/********************************************************************************/
-
-KOKKOS_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const double* n,
-  const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
-
-unsigned int dim = NumberDimensions;
-unsigned int i = 0, j1 = 1, j2 = 2;
-double r2_ij1 = 0.0;
-double r2_ij2 = 0.0;
-double r_ij1__dot__r_ij2 = 0.0;
-double r_ij1[3];
-double r_ij2[3];
-
-//! Contribution of the dipole to the energy
-*V_dipole_ij1j2 = 0.0;
-
-//! Set cubic spline to evaluate the dipole interation curve
-CubicSpline u_ij1;
-if ((spc[i] == Mg) && (spc[j1] == Mg)) {
-u_ij1 = getSpline(AdpType::MgMg, SplineType::u, u_ij1, soADevice);
-} else if ((spc[i] == H) && (spc[j1] == H)) {
-u_ij1 = getSpline(AdpType::HH, SplineType::u, u_ij1, soADevice);
-} else {
-u_ij1 = getSpline(AdpType::MgH, SplineType::u, u_ij1, soADevice);
-}
-
-CubicSpline u_ij2;
-if ((spc[i] == Mg) && (spc[j2] == Mg)) {
-u_ij2 = getSpline(AdpType::MgMg, SplineType::u, u_ij2, soADevice);
-} else if ((spc[i] == H) && (spc[j2] == H)) {
-u_ij2 = getSpline(AdpType::HH, SplineType::u, u_ij2, soADevice);
-} else {
-u_ij2 = getSpline(AdpType::MgH, SplineType::u, u_ij2, soADevice);
-}
-
-//! Compute parameters
-for (unsigned int alpha = 0; alpha < dim; alpha++) {
-r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
-r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
-r2_ij1 += dsqr(r_ij1[alpha]);
-r2_ij2 += dsqr(r_ij2[alpha]);
-r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
-}
-double norm_r_ij1 = sqrt(r2_ij1);
-double norm_r_ij2 = sqrt(r2_ij2);
-
-double nn_u_ij1 = n[i] * n[j1] * cubic_spline(&u_ij1, norm_r_ij1);
-double nn_u_ij2 = n[i] * n[j2] * cubic_spline(&u_ij2, norm_r_ij2);
-
-*V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
-
-} // V_dipole_ij1j2_kokkos
 /********************************************************************************/
 
 static void dV_dipole_ij1j2_dq(int direction, double* dV_dipole_ij1j2_dq,
@@ -2762,60 +2561,6 @@ static void V_quadrupole_ij1j2(double* V_quadrupole_ij1_ij2, const double* n,
 }
 
 /*********************************************************************************/
-
-KOKKOS_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
-  const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
-
-unsigned int dim = NumberDimensions;
-unsigned int i = 0, j1 = 1, j2 = 2;
-double r2_ij1 = 0.0;
-double r2_ij2 = 0.0;
-double r_ij1__dot__r_ij2 = 0.0;
-double r_ij1[3];
-double r_ij2[3];
-
-//! Set to zero the Partial quadrupole contribution of the sites j and k to i
-*V_quadrupole_ij1_ij2 = 0.0;
-
-//! Set cubic spline to evaluate the dipole interation curve
-CubicSpline w_ij1;
-if ((spc[i] == Mg) && (spc[j1] == Mg)) {
-w_ij1 = getSpline(AdpType::MgMg, SplineType::w, w_ij1, soADevice);
-} else if ((spc[i] == H) && (spc[j1] == H)) {
-w_ij1 = getSpline(AdpType::HH, SplineType::w, w_ij1, soADevice);
-} else {
-w_ij1 = getSpline(AdpType::MgH, SplineType::w, w_ij1, soADevice);
-}
-
-CubicSpline w_ij2;
-if ((spc[i] == Mg) && (spc[j2] == Mg)) {
-w_ij2 = getSpline(AdpType::MgMg, SplineType::w, w_ij2, soADevice);
-} else if ((spc[i] == H) && (spc[j2] == H)) {
-w_ij2 = getSpline(AdpType::HH, SplineType::w, w_ij2, soADevice);
-} else {
-w_ij2 = getSpline(AdpType::MgH, SplineType::w, w_ij2, soADevice);
-}
-
-//! Compute parameters
-for (unsigned int alpha = 0; alpha < dim; alpha++) {
-r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
-r_ij2[alpha] = q[dim * i + alpha] - q[dim * j2 + alpha];
-r2_ij1 += dsqr(r_ij1[alpha]);
-r2_ij2 += dsqr(r_ij2[alpha]);
-r_ij1__dot__r_ij2 += r_ij1[alpha] * r_ij2[alpha];
-}
-double norm_r_ij1 = sqrt(r2_ij1);
-double norm_r_ij2 = sqrt(r2_ij2);
-
-double nn_w_ij1 = n[i] * n[j1] * cubic_spline(&w_ij1, norm_r_ij1);
-double nn_w_ij2 = n[i] * n[j2] * cubic_spline(&w_ij2, norm_r_ij2);
-
-*V_quadrupole_ij1_ij2 =
-(1.0 / 2.0) * nn_w_ij1 * nn_w_ij2 * dsqr(r_ij1__dot__r_ij2) -
-(1.0 / 6.0) * nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2;
-}
-
-/********************************************************************************/
 
 static void dV_quadrupole_ij1j2_dq(int direction,
                                    double* dV_quadrupole_ij1_ij2_dq,

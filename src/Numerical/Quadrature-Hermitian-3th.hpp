@@ -84,7 +84,7 @@ void meanfield_integral_gh_3th_d2mq(int direction, double *integral_hess_f,
 
 /********************************************************************************/
 template<typename Dispatcher>
-KOKKOS_FUNCTION void meanfield_integral_gh3th_Kokkos(double* integral_f, 
+KOKKOS_INLINE_FUNCTION void meanfield_integral_gh3th_Kokkos(double* integral_f, 
                               void* ctx_measure, SoADevice *soADevice, Dispatcher function) {
 
   //! Set to zero the value of the integral

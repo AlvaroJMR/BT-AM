@@ -10,19 +10,19 @@ auto extractRowBlock(const View &matrix, int row, int startCol, int numCols) {
     return Kokkos::subview(matrix, row, std::make_pair(startCol, startCol + numCols));
 }
 
-template <typename Input_View, typename Output_View>
+template <typename Input_View>
 KOKKOS_INLINE_FUNCTION
 void concatenateVectors(const Input_View &v1,
                         const Input_View &v2,
-                        Output_View &out)
+                        double *out)
 {
     auto n1 = v1.extent(0);
     auto n2 = v2.extent(0);
     for (size_t i = 0; i < n1; i++) {
-        out(i) = static_cast<typename Output_View::value_type>(v1(i));
+        out[i] = v1(i);
     }
     for (size_t i = 0; i < n2; i++) {
-        out(n1 + i) = static_cast<typename Output_View::value_type>(v2(i));
+        out[n1 + i] = v2(i);
     }
 }
 
@@ -457,7 +457,7 @@ double dsqr(T a) {
   return (da == 0.0) ? 0.0 : da * da;
 }
 
-KOKKOS_INLINE_FUNCTION void read_spline(FILE * f_adp, int index, CubicSpline dest ) {
+/* KOKKOS_INLINE_FUNCTION void read_spline(FILE * f_adp, int index, CubicSpline dest ) {
   int error;
   View_Double_Vector_Host x = View_Double_Vector_Host("HostSpline->x", index + 1);
   View_Double_Vector_Host a = View_Double_Vector_Host("HostSpline->x", index + 1);
@@ -488,7 +488,7 @@ KOKKOS_INLINE_FUNCTION void read_spline(FILE * f_adp, int index, CubicSpline des
   Kokkos::deep_copy(dest.ddc,ddc);   
   Kokkos::deep_copy(dest.ddd,ddd);   
 
-}
+} */
 
 
 inline AtomTopologyKokkos convert_single_atomTopology_to_Kokkos(const AtomTopology &atom_top) {
@@ -920,7 +920,7 @@ inline void initSoA_ADP(
   }
 
 
-inline void limpiarADPPotencial(adpPotential &pot) {
+/* inline void limpiarADPPotencial(adpPotential &pot) {
   
       pot.embed.x   = View_Double_Vector_Host();
       pot.embed.a   = View_Double_Vector_Host();
@@ -976,7 +976,7 @@ inline void limpiarADPPotencial(adpPotential &pot) {
       pot.w.dd      = View_Double_Vector_Host();
       pot.w.ddc     = View_Double_Vector_Host();
       pot.w.ddd     = View_Double_Vector_Host();
-    }
+    } */
 
   KOKKOS_INLINE_FUNCTION
   CubicSpline getSpline(
@@ -1058,13 +1058,6 @@ inline void limpiarADPPotencial(adpPotential &pot) {
     s.dd_d  = dat_dd  + start;
     s.ddc_d = dat_ddc + start;
     s.ddd_d = dat_ddd + start;
-
-    /* Kokkos::printf(
-      "Valor 0 en spline con Kokkos: %f Valor en el array %f y device %f\n",
-      s.d_d[0],
-      dat_d[0],
-      soADevice->rho_d[0]
-  ); */
 
   return s;
 }

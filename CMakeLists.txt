@@ -80,8 +80,10 @@ elseif(CMAKE_BUILD_TYPE MATCHES "Release")
 message(STATUS "Release mode")
 #set(CMAKE_CXX_FLAGS_RELEASE "-openmp --coverage -Ofast")
 #set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
+set(CMAKE_CXX_FLAGS_RELEASE " -Ofast")
 endif()
 
+message(STATUS "FLAGS RELEASE: ${CMAKE_CXX_FLAGS_RELEASE}")
 set(Kokkos_COMMON_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Kokkos)
 
 ###############################################################################

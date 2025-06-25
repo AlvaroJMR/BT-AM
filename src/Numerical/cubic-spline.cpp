@@ -38,81 +38,55 @@ SPLINE_FUNCTION int init_spline(CubicSpline* cs, int n, double dx) {
 
   cs->isKernel = false;
 
-  #if USE_KOKKOS == 1
-  /* cs->x   = DualView_Vector_Double("cs_x",   n + 1);
-  cs->a   = DualView_Vector_Double("cs_a",   n + 1);
-  cs->b   = DualView_Vector_Double("cs_b",   n + 1);
-  cs->c   = DualView_Vector_Double("cs_c",   n + 1);
-  cs->d   = DualView_Vector_Double("cs_d",   n + 1);
-  cs->db  = DualView_Vector_Double("cs_db",  n + 1);  
-  cs->dc  = DualView_Vector_Double("cs_dc",  n + 1);
-  cs->dd  = DualView_Vector_Double("cs_dd",  n + 1);
-  cs->ddc = DualView_Vector_Double("cs_ddc", n + 1);
-  cs->ddd = DualView_Vector_Double("cs_ddd", n + 1);
-  
-  cs->x .modify_host();   Kokkos::deep_copy(cs->x .view_host(), 0.0);   cs->x .sync_device();
-  cs->a .modify_host();   Kokkos::deep_copy(cs->a .view_host(), 0.0);   cs->a .sync_device();
-  cs->b .modify_host();   Kokkos::deep_copy(cs->b .view_host(), 0.0);   cs->b .sync_device();
-  cs->c .modify_host();   Kokkos::deep_copy(cs->c .view_host(), 0.0);   cs->c .sync_device();
-  cs->d .modify_host();   Kokkos::deep_copy(cs->d .view_host(), 0.0);   cs->d .sync_device();
-  cs->db.modify_host();   Kokkos::deep_copy(cs->db.view_host(), 0.0);   cs->db.sync_device();
-  cs->dc.modify_host();   Kokkos::deep_copy(cs->dc.view_host(), 0.0);   cs->dc.sync_device();
-  cs->dd.modify_host();   Kokkos::deep_copy(cs->dd.view_host(), 0.0);   cs->dd.sync_device();
-  cs->ddc.modify_host();  Kokkos::deep_copy(cs->ddc.view_host(),0.0);   cs->ddc.sync_device();
-  cs->ddd.modify_host();  Kokkos::deep_copy(cs->ddd.view_host(),0.0);   cs->ddd.sync_device(); */
+  cs->x = (double*)calloc((1), sizeof(double));
 
-  cs->x   = View_Double_Vector_Host("cs_x",   n + 1);
-  cs->a   = View_Double_Vector_Host("cs_a",   n + 1);
-  cs->b   = View_Double_Vector_Host("cs_b",   n + 1);
-  cs->c   = View_Double_Vector_Host("cs_c",   n + 1);
-  cs->d   = View_Double_Vector_Host("cs_d",   n + 1);
-  cs->db  = View_Double_Vector_Host("cs_db",  n + 1);  
-  cs->dc  = View_Double_Vector_Host("cs_dc",  n + 1);
-  cs->dd  = View_Double_Vector_Host("cs_dd",  n + 1);
-  cs->ddc = View_Double_Vector_Host("cs_ddc", n + 1);
-  cs->ddd = View_Double_Vector_Host("cs_ddd", n + 1);
-  
-  Kokkos::deep_copy(cs->x, 0.0);
-  Kokkos::deep_copy(cs->a, 0.0);
-  Kokkos::deep_copy(cs->b, 0.0);
-  Kokkos::deep_copy(cs->c, 0.0);
-  Kokkos::deep_copy(cs->d, 0.0);
-  Kokkos::deep_copy(cs->db, 0.0);
-  Kokkos::deep_copy(cs->dc, 0.0);
-  Kokkos::deep_copy(cs->dd, 0.0);
-  Kokkos::deep_copy(cs->ddc,0.0);
-  Kokkos::deep_copy(cs->ddd,0.0);
+  cs->a = (double*)calloc((n), sizeof(double));
 
-  #endif
+  cs->b = (double*)calloc((n), sizeof(double));
 
-  #if USE_KOKKOS == 0
+  cs->c = (double*)calloc((n), sizeof(double));
 
-  cs->x = Eigen::VectorXd::Zero(n + 1);
+  cs->d = (double*)calloc((n), sizeof(double));
 
-  cs->a = Eigen::VectorXd::Zero(n + 1);
+  cs->db = (double*)calloc((n), sizeof(double));
 
-  cs->b = Eigen::VectorXd::Zero(n + 1);
+  cs->dc = (double*)calloc((n), sizeof(double));
 
-  cs->c = Eigen::VectorXd::Zero(n + 1);
+  cs->dd = (double*)calloc((n), sizeof(double));
 
-  cs->d = Eigen::VectorXd::Zero(n + 1);
+  cs->ddc = (double*)calloc((n), sizeof(double));
 
-  cs->db = Eigen::VectorXd::Zero(n + 1);
-
-  cs->dc = Eigen::VectorXd::Zero(n + 1);
-
-  cs->dd = Eigen::VectorXd::Zero(n + 1);
-
-  cs->ddc = Eigen::VectorXd::Zero(n + 1);
-
-  cs->ddd = Eigen::VectorXd::Zero(n + 1);
-  #endif
+  cs->ddd = (double*)calloc((n), sizeof(double));
 
   return EXIT_SUCCESS;
 }
 
 /********************************************************************************/
 
+int destroy_spline(CubicSpline* cs) {
+
+  free(cs->x);
+
+  free(cs->a);
+
+  free(cs->b);
+
+  free(cs->c);
+
+  free(cs->d);
+
+  free(cs->db);
+
+  free(cs->dc);
+
+  free(cs->dd);
+
+  free(cs->ddc);
+
+  free(cs->ddd);
+
+  return EXIT_SUCCESS;
+}
 
 /********************************************************************************/
 

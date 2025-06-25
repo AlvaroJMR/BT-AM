@@ -304,104 +304,44 @@ typedef struct CubicSpline {
   //! @note If isKernel is true, the data is stored in device memory and executed in default execution space.
   bool isKernel;
 
-  #if USE_KOKKOS == 0
+   //! @param x: independent variable
+   double *x;
 
-  //! @param x: independent variable
-  Eigen::VectorXd x;
+   //! @param a: coefficient of grade 0 of the cubic spline function
+   double *a;
+ 
+   //! @param b: coefficient of grade 1 of the cubic spline function
+   double *b;
+ 
+   //! @param c: coefficient of grade 2 of the cubic spline function
+   double *c;
+ 
+   //! @param d: coefficient of grade 3 of the cubic spline function
+   double *d;
+ 
+   //! @param db: coefficient of grade 0 of the first derivative of the cubic
+   //! spline function
+   double *db;
+ 
+   //! @param dc: coefficient of grade 1 of the first derivative of the cubic
+   //! spline function
+   double *dc;
+ 
+   //! @param dd: coefficient of grade 2 of the first derivative of the cubic
+   //! spline function
+   double *dd;
+ 
+   //! @param ddc: coefficient of grade 0 of the second derivative of the cubic
+   //! spline function
+   double *ddc;
+ 
+   //! @param ddd: coefficient of grade 1 of the second derivative of the cubic
+   //! spline function
+   double *ddd;
 
-  //! @param a: coefficient of grade 0 of the cubic spline function
-  Eigen::VectorXd a;
-
-  //! @param b: coefficient of grade 1 of the cubic spline function
-  Eigen::VectorXd b;
-
-  //! @param c: coefficient of grade 2 of the cubic spline function
-  Eigen::VectorXd c;
-
-  //! @param d: coefficient of grade 3 of the cubic spline function
-  Eigen::VectorXd d;
-
-  //! @param db: coefficient of grade 0 of the first derivative of the cubic
-  //! spline function
-  Eigen::VectorXd db;
-
-  //! @param dc: coefficient of grade 1 of the first derivative of the cubic
-  //! spline function
-  Eigen::VectorXd dc;
-
-  //! @param dd: coefficient of grade 2 of the first derivative of the cubic
-  //! spline function
-  Eigen::VectorXd dd;
-
-  //! @param ddc: coefficient of grade 0 of the second derivative of the cubic
-  //! spline function
-  Eigen::VectorXd ddc;
-
-  //! @param ddd: coefficient of grade 1 of the second derivative of the cubic
-  //! spline function
-  Eigen::VectorXd ddd;
-
-  #endif
-
-  #if USE_KOKKOS == 1
-
-  //! @param x: independent variable
-  View_Double_Vector_Host x;
-
-  //! @param a: coefficient of grade 0 of the cubic spline function
-  View_Double_Vector_Host a;
-
-  //! @param b: coefficient of grade 1 of the cubic spline function
-  View_Double_Vector_Host b;
-
-  //! @param c: coefficient of grade 2 of the cubic spline function
-  View_Double_Vector_Host c;
-
-  //! @param d: coefficient of grade 3 of the cubic spline function
-  View_Double_Vector_Host d;
-
-  //! @param db: coefficient of grade 0 of the first derivative of the cubic
-  //! spline function
-  View_Double_Vector_Host db;
-
-  //! @param dc: coefficient of grade 1 of the first derivative of the cubic
-  //! spline function
-  View_Double_Vector_Host dc;
-
-  //! @param dd: coefficient of grade 2 of the first derivative of the cubic
-  //! spline function
-  View_Double_Vector_Host dd;
-
-  //! @param ddc: coefficient of grade 0 of the second derivative of the cubic
-  //! spline function
-  View_Double_Vector_Host ddc;
-
-  //! @param ddd: coefficient of grade 1 of the second derivative of the cubic
-  //! spline function
-  View_Double_Vector_Host ddd;
-
+  
   double *x_d, *a_d, *b_d, *c_d, 
   *d_d, *db_d, *dc_d, *dd_d, *ddc_d, *ddd_d;
-  /*View_Double_Vector_Device x_d, a_d, b_d, c_d, 
-      d_d, db_d, dc_d, dd_d, ddc_d, ddd_d;
-
-
-  void allocate(int _n){
-        n = _n;
-        std::size_t N = std::size_t(n)+1;
-        x_d = View_Double_Vector_Device("spline.x",   N);
-        a_d   = View_Double_Vector_Device("spline.a",   N);
-        b_d   = View_Double_Vector_Device("spline.b",   N);
-        c_d   = View_Double_Vector_Device("spline.c",   N);
-        d_d   = View_Double_Vector_Device("spline.d",   N);
-        db_d  = View_Double_Vector_Device("spline.db",  N);
-        dc_d  = View_Double_Vector_Device("spline.dc",  N);
-        dd_d  = View_Double_Vector_Device("spline.dd",  N);
-        ddc_d = View_Double_Vector_Device("spline.ddc", N);
-        ddd_d = View_Double_Vector_Device("spline.ddd", N);
-      } */
-
-  #endif
 
 
 } CubicSpline;
