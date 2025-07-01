@@ -80,7 +80,7 @@ elseif(CMAKE_BUILD_TYPE MATCHES "Release")
 message(STATUS "Release mode")
 #set(CMAKE_CXX_FLAGS_RELEASE "-openmp --coverage -Ofast")
 #set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
-set(CMAKE_CXX_FLAGS_RELEASE " -Ofast")
+set(CMAKE_CXX_FLAGS_RELEASE " -Ofast -fopenmp -fopenmp-simd -march=native -funroll-loops")
 endif()
 
 message(STATUS "FLAGS RELEASE: ${CMAKE_CXX_FLAGS_RELEASE}")
