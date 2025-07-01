@@ -36,7 +36,7 @@
     const PetscScalar_Vector_Default &xi,
     const AtomSpecie_Default &specie,
     const AtomTopology atom_topology_i,
-    double* mean_q_ij1,
+    const aux_Vector mean_q_ij1,
     const DevSnapUnmanaged &soADevice) {
     
     //! @brief Auxiliar variables
@@ -76,21 +76,18 @@
   
       //! @brief Fill data for the measure (i,j1)
       concatenateVectors(mean_q_i, mean_q_j1, mean_q_ij1);
-      std::array<double, 2>  xi_ij1 = std::array<double, 2> {xi_i, xi_j1};
-      std::array<unsigned int, 2>  sites_ij1 = std::array<unsigned int, 2> {site_i, site_j1};
+      Kokkos::Array<double, 2>  xi_ij1 = Kokkos::Array<double, 2> {xi_i, xi_j1};
+      Kokkos::Array<unsigned int, 2>  sites_ij1 = Kokkos::Array<unsigned int, 2> {site_i, site_j1};
       AtomicSpecie spc_ij1[2] = {spc_i, spc_j1};
   
        //! @brief Compute energy density
       double rho_ij = 0.0;
   
       //! Create functions
-      rho_ij_adp_MgHx_dispatcher functions_rho_ij { Functions_Enum::FK, &rho_ij, xi_ij1.data(), mean_q_ij1, spc_ij1, soADevice.data() };
-      //potential_function functions_rho_ij = rho_ij_adp_MgHx_constructor();
+      rho_ij_adp_MgHx_dispatcher functions_rho_ij { Functions_Enum::FK, &rho_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, soADevice.data() };
       
       functions_rho_ij();
       rho_i += rho_ij;
-      /*functions_rho_ij.FK2(&rho_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, soADevice.data() );
-      rho_i += rho_ij; */
     } 
     
     return rho_i;
@@ -116,7 +113,7 @@
      const AtomSpecie_Default &specie,
      const AtomTopology atom_topology_i,
      const DevSnapUnmanaged &soADevice,
-     double* mean_q_ij1);
+     const aux_Vector mean_q_ij1);
        
  
  double evaluate_mf_rho_i_adp_MgHx(unsigned int site_i,            //!
@@ -132,9 +129,10 @@
    const PetscScalar_Vector_Default &xi,
    const AtomSpecie_Default &specie,
    const AtomTopology atom_topology_i,
-   double* mean_q_ij1,
+   const aux_Vector mean_q_ij1,
    const DevSnapUnmanaged &soADevice,
-         gaussian_measure_ctx_kokkos &ctx
+   const gaussian_measure_ctx_kokkos &ctx,
+   const bool multipole_integral  //! If the integral is multipole or GH3TH  
    );
      
  double evaluate_S0_i_adp_MgHx(unsigned int site_i,                 //!
@@ -164,7 +162,7 @@
      const PetscScalar_Vector_Default &mf_rho,          //! Energy density
      const AtomSpecie_Default &specie,          //! Atom
      const AtomTopology atom_topology_i,
-     double* mean_q_ij1, 
+     const aux_Vector mean_q_ij1, 
      const ThreeD_Double_View aux_view,
      const DevSnapUnmanaged &soADevice); 
      
@@ -177,24 +175,19 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
         const PetscScalar_Vector_Default &gamma,        //!
         const AtomSpecie_Default &specie,
         const AtomTopology atom_topology_i,
-        double* mean_q_ij1,
+        const aux_Vector mean_q_ij1,
         const DevSnapUnmanaged &soADevice,
         const View_Double_Vector_Device element_mass,
-              gaussian_measure_ctx_kokkos &ctx)  //!
+        const gaussian_measure_ctx_kokkos &ctx,
+        const bool multipole_integral  //! If the integral is multipole or GH3TH )  //! 
+        )
+                                                                                        
       {
       
       unsigned int dim = NumberDimensions;
       
       //! Define Integration rule
-      bool multipole_integral = false;
-      #if defined(MULTIPOLE_INTEGRAL)
-      multipole_integral = true;
-      #elif defined(GH3TH_INTEGRAL)
-      multipole_integral = false;
-      #else
-      #error "Define MULTIPOLE_INTEGRAL or GH3TH_INTEGRAL"
-      #endif
-      
+    
       //! Local variables
       double mf_rho_i = mf_rho(site_i);
       double V0_embed_i = 0.0;  //! Meanfield Embedded forces term
@@ -221,7 +214,6 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
       return 0.0;
       }
       
-      Kokkos::Timer timer11;
       for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
       
       //! @brief Get atomistic information of site j
@@ -238,7 +230,7 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
       
       //! @brief Fill data for the measure
       concatenateVectors(mean_q_i, mean_q_j1, mean_q_ij1);
-      std::array<double, 2>  xi_ij1 = std::array<double, 2> {xi_i, xi_j1};
+      Kokkos::Array<double, 2>  xi_ij1 = Kokkos::Array<double, 2> {xi_i, xi_j1};
       double stdv_q_ij1[2] = {stdv_q_i, stdv_q_j1};
       AtomicSpecie spc_ij1[2] = {spc_i, spc_j1};
       
@@ -248,7 +240,7 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
       
       //! @brief Create measure/functions
       
-      fill_out_gaussian_measure_Kokkos(mean_q_ij1, stdv_q_ij1,
+      fill_out_gaussian_measure_Kokkos(mean_q_ij1.data(), stdv_q_ij1,
         xi_ij1.data(), spc_ij1, dof_table_ij, 2, &ctx);      
             
       //! @brief Compute meanfield pairing term
@@ -293,7 +285,7 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
       
       //! @brief Fill data for the measure
       auto mean_q_ij1j2 = concatenateToArray<Kokkos::View<double*>, 9>(mean_q_i, mean_q_j1, mean_q_j2);
-      std::array<double, 3>  xi_ij1j2 = std::array<double, 3> {xi_i, xi_j1, xi_j2};
+      Kokkos::Array<double, 3>  xi_ij1j2 = Kokkos::Array<double, 3> {xi_i, xi_j1, xi_j2};
       AtomicSpecie spc_ij1j2[3] = {spc_i, spc_j1, spc_j2};
       double stdv_q_ij1j2[3] = {stdv_q_i, stdv_q_j1, stdv_q_j2};
       

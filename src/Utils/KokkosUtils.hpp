@@ -7,30 +7,29 @@
 template <typename View>
 KOKKOS_INLINE_FUNCTION
 auto extractRowBlock(const View &matrix, int row, int startCol, int numCols) {
-    return Kokkos::subview(matrix, row, std::make_pair(startCol, startCol + numCols));
+  return Kokkos::subview( matrix, row, Kokkos::make_pair(startCol, startCol + numCols));
 }
-
-template <typename Input_View>
+template <typename Input_View, typename Output_View>
 KOKKOS_INLINE_FUNCTION
 void concatenateVectors(const Input_View &v1,
                         const Input_View &v2,
-                        double *out)
+                        Output_View &out)
 {
     auto n1 = v1.extent(0);
     auto n2 = v2.extent(0);
     for (size_t i = 0; i < n1; i++) {
-        out[i] = v1(i);
+        out(i) = static_cast<typename Output_View::value_type>(v1(i));
     }
     for (size_t i = 0; i < n2; i++) {
-        out[n1 + i] = v2(i);
+        out(n1 + i) = static_cast<typename Output_View::value_type>(v2(i));
     }
 }
 
 template <typename View, size_t size>
 KOKKOS_INLINE_FUNCTION
-std::array<typename View::value_type, size> concatenateToArray(
+Kokkos::Array<typename View::value_type, size> concatenateToArray(
     const View& v1, const View& v2, const View& v3) {
-    std::array<typename View::value_type, size> out;
+      Kokkos::Array<typename View::value_type, size> out;
 
     size_t index = 0;
 
@@ -60,435 +59,12 @@ void multi_sum_scaled (const DestView dest,
   }
 }
 
-
-/* KOKKOS_INLINE_FUNCTION void deep_copy_cubic_spline(CubicSpline &dest, const CubicSpline &src) {
-    dest.dx = src.dx;
-    dest.n  = src.n;
-    dest.x   = View_Double_Vector_Device("dest.x", src.n + 1);
-    dest.a   = View_Double_Vector_Device("dest.a", src.n + 1);
-    dest.b   = View_Double_Vector_Device("dest.b", src.n + 1);
-    dest.c   = View_Double_Vector_Device("dest.c", src.n + 1);
-    dest.d   = View_Double_Vector_Device("dest.d", src.n + 1);
-    dest.db  = View_Double_Vector_Device("dest.db", src.n + 1);
-    dest.dc  = View_Double_Vector_Device("dest.dc", src.n + 1);
-    dest.dd  = View_Double_Vector_Device("dest.dd", src.n + 1);
-    dest.ddc = View_Double_Vector_Device("dest.ddc", src.n + 1);
-    dest.ddd = View_Double_Vector_Device("dest.ddd", src.n + 1);
-
-
-    Kokkos::deep_copy(dest.x, src.x);
-    Kokkos::deep_copy(dest.a, src.a);
-    Kokkos::deep_copy(dest.b, src.b);
-    Kokkos::deep_copy(dest.c, src.c);
-    Kokkos::deep_copy(dest.d, src.d);
-    Kokkos::deep_copy(dest.db, src.db);
-    Kokkos::deep_copy(dest.dc, src.dc);
-    Kokkos::deep_copy(dest.dd, src.dd);
-    Kokkos::deep_copy(dest.ddc, src.ddc);
-    Kokkos::deep_copy(dest.ddd, src.ddd);
-
-}
-  
-KOKKOS_INLINE_FUNCTION void deep_copy_adpPotential(adpPotential &dest, const adpPotential &src) {
-
-
-  dest.n_embed = src.n_embed;
-  dest.n_rho = src.n_rho;
-  dest.n_pair = src.n_pair;
-  dest.n_u = src.n_u;
-  dest.n_w = src.n_w;
-  dest.mass = src.mass;
-  dest.radius = src.radius;
-  dest.factor = src.factor;
-  dest.r_cutoff = src.r_cutoff;
-
-
-  deep_copy_cubic_spline(dest.embed, src.embed);
-  deep_copy_cubic_spline(dest.rho, src.rho);
-  deep_copy_cubic_spline(dest.pair, src.pair);
-  deep_copy_cubic_spline(dest.u, src.u);
-  deep_copy_cubic_spline(dest.w, src.w);
-
-
-}
-  
-
-KOKKOS_INLINE_FUNCTION void copy_adpPotential_to_device(
-  AdpPotencial_Device &adpDevice,
-  const adpPotential   &hostAdp,
-  int                    pos)
-{
-  static auto mirror = Kokkos::create_mirror_view(adpDevice);
-
-  Kokkos::deep_copy(mirror, adpDevice);
-
-  if (pos >= 0 && pos < static_cast<int>(mirror.extent(0))) {
-    deep_copy_adpPotential(mirror(pos), hostAdp);
-  }
-  Kokkos::deep_copy(adpDevice, mirror);
-
-
-} */
-
-
-/* inline void copy_spline_scalars_device(
-  CubicSpline       &dst,
-  const CubicSpline &src,
-  const char        *label)
-{
-  Kokkos::printf("Probando escalares\n");
-
-  auto dx_val = src.dx;
-  auto n_val  = src.n;
-
-  CubicSpline *p_dst = &dst;
-
-  Kokkos::printf("Debe de fallar aqui\n");
-
-  Kokkos::parallel_for(
-    label,
-    Kokkos::RangePolicy< Kokkos::DefaultExecutionSpace >(0,1),
-    [=] KOKKOS_FUNCTION (int)
-    {
-      p_dst->dx = dx_val;
-      p_dst->n  = n_val;
-    }
-  );
-}
-
-inline void copy_cubic_spline_device(
-  CubicSpline       &dst,
-  const CubicSpline &src,
-  const char        *label = "copy_spline")
-{
-  Kokkos::printf("Probando\n");
-
-  std::size_t N = std::size_t(src.n) + 1;
-
-  dst.x   = View_Double_Vector_Device("dst.x",   N);
-  Kokkos::printf("Probando más\n");
-  dst.a   = View_Double_Vector_Device("dst.a",   N);
-  dst.b   = View_Double_Vector_Device("dst.b",   N);
-  dst.c   = View_Double_Vector_Device("dst.c",   N);
-  dst.d   = View_Double_Vector_Device("dst.d",   N);
-  dst.db  = View_Double_Vector_Device("dst.db",  N);
-  dst.dc  = View_Double_Vector_Device("dst.dc",  N);
-  dst.dd  = View_Double_Vector_Device("dst.dd",  N);
-  dst.ddc = View_Double_Vector_Device("dst.ddc", N);
-  dst.ddd = View_Double_Vector_Device("dst.ddd", N);
-
-  Kokkos::printf("Copiar\n");
-
-  Kokkos::deep_copy(Kokkos::subview(dst.x,   Kokkos::ALL()), src.x);
-  Kokkos::deep_copy(Kokkos::subview(dst.a,   Kokkos::ALL()), src.a);
-  Kokkos::deep_copy(Kokkos::subview(dst.b,   Kokkos::ALL()), src.b);
-  Kokkos::deep_copy(Kokkos::subview(dst.c,   Kokkos::ALL()), src.c);
-  Kokkos::deep_copy(Kokkos::subview(dst.d,   Kokkos::ALL()), src.d);
-  Kokkos::deep_copy(Kokkos::subview(dst.db,  Kokkos::ALL()), src.db);
-  Kokkos::deep_copy(Kokkos::subview(dst.dc,  Kokkos::ALL()), src.dc);
-  Kokkos::deep_copy(Kokkos::subview(dst.dd,  Kokkos::ALL()), src.dd);
-  Kokkos::deep_copy(Kokkos::subview(dst.ddc, Kokkos::ALL()), src.ddc);
-  Kokkos::deep_copy(Kokkos::subview(dst.ddd, Kokkos::ALL()), src.ddd);
-
-  Kokkos::printf("Terminando de probar\n");
-
-
-  copy_spline_scalars_device(dst, src, label);
-}
-
-inline void copy_adpPotential_to_device(
-  AdpPotencial_Device &adpDevice,
-  const adpPotential  &hostAdp,
-  int                   pos)
-{
-  int M = int(adpDevice.extent(0));
-  if (pos<0 || pos>=M) throw std::out_of_range("pos fuera de rango");
-
-  Kokkos::printf("Antes de copiar escalares\n");
-
-  auto n_embed = hostAdp.n_embed;
-  auto n_rho   = hostAdp.n_rho;
-  auto n_pair  = hostAdp.n_pair;
-  auto n_u     = hostAdp.n_u;
-  auto n_w     = hostAdp.n_w;
-  auto mass    = hostAdp.mass;
-  auto radius  = hostAdp.radius;
-  auto factor  = hostAdp.factor;
-  auto r_cut   = hostAdp.r_cutoff;
-
-  Kokkos::printf("Antes de pillar el tipo\n");
-
-  using DPS = typename AdpPotencial_Device::value_type;
-
-  Kokkos::printf("Despues de pillar el tipo\n");
-
-  DPS *p_dst = adpDevice.data() + pos;
-
-  Kokkos::printf("Voy a copiar escalares\n");
-
-  Kokkos::parallel_for(
-    "copy_adp_scalars",
-    Kokkos::RangePolicy< Kokkos::DefaultExecutionSpace >(0,1),
-    [=] KOKKOS_FUNCTION(int)
-    {
-      p_dst->n_embed  = n_embed;
-      p_dst->n_rho    = n_rho;
-      p_dst->n_pair   = n_pair;
-      p_dst->n_u      = n_u;
-      p_dst->n_w      = n_w;
-      p_dst->mass     = mass;
-      p_dst->radius   = radius;
-      p_dst->factor   = factor;
-      p_dst->r_cutoff = r_cut;
-    }
-  );
-
-  copy_cubic_spline_device(p_dst->embed, hostAdp.embed, "copy_embed");
-  copy_cubic_spline_device(p_dst->rho,   hostAdp.rho,   "copy_rho");
-  copy_cubic_spline_device(p_dst->pair,  hostAdp.pair,  "copy_pair");
-  copy_cubic_spline_device(p_dst->u,     hostAdp.u,     "copy_u");
-  copy_cubic_spline_device(p_dst->w,     hostAdp.w,     "copy_w");
-
-} */
-
-/* inline void copy_adpPotential_to_device(
-  AdpPotencial_Device &adpDevice,
-  const adpPotential  &hostAdp,
-  int                   pos)
-{
-  int N = adpDevice.extent(0);
-  if (pos < 0 || pos >= N) throw std::out_of_range("pos fuera de rango");
-
-  auto ne = hostAdp.n_embed;
-  auto nr = hostAdp.n_rho;
-  auto np = hostAdp.n_pair;
-  auto nu = hostAdp.n_u;
-  auto nw = hostAdp.n_w;
-  auto m  = hostAdp.mass;
-  auto r  = hostAdp.radius;
-  auto f  = hostAdp.factor;
-  auto rc = hostAdp.r_cutoff;
-
-  {
-    auto p = adpDevice.data() + pos;
-    Kokkos::parallel_for(
-      "copy_adp_scalars",
-      Kokkos::RangePolicy<>(0,1),
-      [=] KOKKOS_FUNCTION(int)
-      {
-        p->n_embed  = ne;
-        p->n_rho    = nr;
-        p->n_pair   = np;
-        p->n_u      = nu;
-        p->n_w      = nw;
-        p->mass     = m;
-        p->radius   = r;
-        p->factor   = f;
-        p->r_cutoff = rc;
-      }
-    );
-  }
-
-  auto syncSpline = [&](auto &dvHost, auto &dvDev){
-    dvDev.modify_host();
-    Kokkos::deep_copy(dvDev.view_host(), dvHost.view_host());
-    dvDev.sync_device();
-  };
-
-  auto &dst = adpDevice(pos);
-
-  syncSpline(hostAdp.embed.x,   dst.embed.x);
-  syncSpline(hostAdp.embed.a,   dst.embed.a);
-  syncSpline(hostAdp.embed.b,   dst.embed.b);
-  syncSpline(hostAdp.embed.c,   dst.embed.c);
-  syncSpline(hostAdp.embed.d,   dst.embed.d);
-  syncSpline(hostAdp.embed.db,  dst.embed.db);
-  syncSpline(hostAdp.embed.dc,  dst.embed.dc);
-  syncSpline(hostAdp.embed.dd,  dst.embed.dd);
-  syncSpline(hostAdp.embed.ddc, dst.embed.ddc);
-  syncSpline(hostAdp.embed.ddd, dst.embed.ddd);
-
-  syncSpline(hostAdp.rho.x,   dst.rho.x);
-  syncSpline(hostAdp.rho.a,   dst.rho.a);
-  syncSpline(hostAdp.rho.b,   dst.rho.b);
-  syncSpline(hostAdp.rho.c,   dst.rho.c);
-  syncSpline(hostAdp.rho.d,   dst.rho.d);
-  syncSpline(hostAdp.rho.db,  dst.rho.db);
-  syncSpline(hostAdp.rho.dc,  dst.rho.dc);
-  syncSpline(hostAdp.rho.dd,  dst.rho.dd);
-  syncSpline(hostAdp.rho.ddc, dst.rho.ddc);
-  syncSpline(hostAdp.rho.ddd, dst.rho.ddd);
-
-  syncSpline(hostAdp.pair.x,   dst.pair.x);
-  syncSpline(hostAdp.pair.a,   dst.pair.a);
-  syncSpline(hostAdp.pair.b,   dst.pair.b);
-  syncSpline(hostAdp.pair.c,   dst.pair.c);
-  syncSpline(hostAdp.pair.d,   dst.pair.d);
-  syncSpline(hostAdp.pair.db,  dst.pair.db);
-  syncSpline(hostAdp.pair.dc,  dst.pair.dc);
-  syncSpline(hostAdp.pair.dd,  dst.pair.dd);
-  syncSpline(hostAdp.pair.ddc, dst.pair.ddc);
-  syncSpline(hostAdp.pair.ddd, dst.pair.ddd);
-
-  syncSpline(hostAdp.u.x,   dst.u.x);
-  syncSpline(hostAdp.u.a,   dst.u.a);
-  syncSpline(hostAdp.u.b,   dst.u.b);
-  syncSpline(hostAdp.u.c,   dst.u.c);
-  syncSpline(hostAdp.u.d,   dst.u.d);
-  syncSpline(hostAdp.u.db,  dst.u.db);
-  syncSpline(hostAdp.u.dc,  dst.u.dc);
-  syncSpline(hostAdp.u.dd,  dst.u.dd);
-  syncSpline(hostAdp.u.ddc, dst.u.ddc);
-  syncSpline(hostAdp.u.ddd, dst.u.ddd);
-
-  syncSpline(hostAdp.w.x,   dst.w.x);
-  syncSpline(hostAdp.w.a,   dst.w.a);
-  syncSpline(hostAdp.w.b,   dst.w.b);
-  syncSpline(hostAdp.w.c,   dst.w.c);
-  syncSpline(hostAdp.w.d,   dst.w.d);
-  syncSpline(hostAdp.w.db,  dst.w.db);
-  syncSpline(hostAdp.w.dc,  dst.w.dc);
-  syncSpline(hostAdp.w.dd,  dst.w.dd);
-  syncSpline(hostAdp.w.ddc, dst.w.ddc);
-  syncSpline(hostAdp.w.ddd, dst.w.ddd);
-} */
-
-
-/* inline void copy_adpPotential_to_device(
-  AdpPot_DualView    &adpDual,
-  const adpPotential &hostAdp,
-  int                  pos)
-{
-  int N = adpDual.extent(0);
-  if (pos < 0 || pos >= N) {
-    throw std::out_of_range("pos fuera de rango");
-  }
-
-  adpDual.modify_host();
-
-  adpPotential &dst = adpDual.view_host()(pos);
-
-  dst.n_embed  = hostAdp.n_embed;
-  dst.n_rho    = hostAdp.n_rho;
-  dst.n_pair   = hostAdp.n_pair;
-  dst.n_u      = hostAdp.n_u;
-  dst.n_w      = hostAdp.n_w;
-  dst.mass     = hostAdp.mass;
-  dst.radius   = hostAdp.radius;
-  dst.factor   = hostAdp.factor;
-  dst.r_cutoff = hostAdp.r_cutoff;
-
-  Kokkos::printf("Despues de copiar escalares\n");
-
-
-  auto syncSpline = [&](DualView_Vector_Double &dvDst, const DualView_Vector_Double &dvSrc) {
-    dvDst.modify_host();
-    Kokkos::deep_copy(dvDst.view_host(), dvSrc.view_host());
-    dvDst.sync_device();
-  }; 
-
-  syncSpline(dst.embed.x,   hostAdp.embed.x);
-  syncSpline(dst.embed.a,   hostAdp.embed.a);
-  syncSpline(dst.embed.b,   hostAdp.embed.b);
-  syncSpline(dst.embed.c,   hostAdp.embed.c);
-  syncSpline(dst.embed.d,   hostAdp.embed.d);
-  syncSpline(dst.embed.db,  hostAdp.embed.db);
-  syncSpline(dst.embed.dc,  hostAdp.embed.dc);
-  syncSpline(dst.embed.dd,  hostAdp.embed.dd);
-  syncSpline(dst.embed.ddc, hostAdp.embed.ddc);
-  syncSpline(dst.embed.ddd, hostAdp.embed.ddd);
-
-  Kokkos::printf("Despues de copiar embed\n");
-
-  syncSpline(dst.rho.x,   hostAdp.rho.x);
-  syncSpline(dst.rho.a,   hostAdp.rho.a);
-  syncSpline(dst.rho.b,   hostAdp.rho.b);
-  syncSpline(dst.rho.c,   hostAdp.rho.c);
-  syncSpline(dst.rho.d,   hostAdp.rho.d);
-  syncSpline(dst.rho.db,  hostAdp.rho.db);
-  syncSpline(dst.rho.dc,  hostAdp.rho.dc);
-  syncSpline(dst.rho.dd,  hostAdp.rho.dd);
-  syncSpline(dst.rho.ddc, hostAdp.rho.ddc);
-  syncSpline(dst.rho.ddd, hostAdp.rho.ddd);
-
-  syncSpline(dst.pair.x,   hostAdp.pair.x);
-  syncSpline(dst.pair.a,   hostAdp.pair.a);
-  syncSpline(dst.pair.b,   hostAdp.pair.b);
-  syncSpline(dst.pair.c,   hostAdp.pair.c);
-  syncSpline(dst.pair.d,   hostAdp.pair.d);
-  syncSpline(dst.pair.db,  hostAdp.pair.db);
-  syncSpline(dst.pair.dc,  hostAdp.pair.dc);
-  syncSpline(dst.pair.dd,  hostAdp.pair.dd);
-  syncSpline(dst.pair.ddc, hostAdp.pair.ddc);
-  syncSpline(dst.pair.ddd, hostAdp.pair.ddd);
-
-  syncSpline(dst.u.x,   hostAdp.u.x);
-  syncSpline(dst.u.a,   hostAdp.u.a);
-  syncSpline(dst.u.b,   hostAdp.u.b);
-  syncSpline(dst.u.c,   hostAdp.u.c);
-  syncSpline(dst.u.d,   hostAdp.u.d);
-  syncSpline(dst.u.db,  hostAdp.u.db);
-  syncSpline(dst.u.dc,  hostAdp.u.dc);
-  syncSpline(dst.u.dd,  hostAdp.u.dd);
-  syncSpline(dst.u.ddc, hostAdp.u.ddc);
-  syncSpline(dst.u.ddd, hostAdp.u.ddd);
-
-  syncSpline(dst.w.x,   hostAdp.w.x);
-  syncSpline(dst.w.a,   hostAdp.w.a);
-  syncSpline(dst.w.b,   hostAdp.w.b);
-  syncSpline(dst.w.c,   hostAdp.w.c);
-  syncSpline(dst.w.d,   hostAdp.w.d);
-  syncSpline(dst.w.db,  hostAdp.w.db);
-  syncSpline(dst.w.dc,  hostAdp.w.dc);
-  syncSpline(dst.w.dd,  hostAdp.w.dd);
-  syncSpline(dst.w.ddc, hostAdp.w.ddc);
-  syncSpline(dst.w.ddd, hostAdp.w.ddd);
-
-
-  Kokkos::printf("Despues de copiar todo\n");
-
-  // adpDual.sync_device();
-} */
-
 template<typename T>
 KOKKOS_INLINE_FUNCTION
 double dsqr(T a) {
   double da = static_cast<double>(a);
   return (da == 0.0) ? 0.0 : da * da;
 }
-
-/* KOKKOS_INLINE_FUNCTION void read_spline(FILE * f_adp, int index, CubicSpline dest ) {
-  int error;
-  View_Double_Vector_Host x = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host a = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host b = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host c = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host d = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host db = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host dc = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host dd = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host ddc = View_Double_Vector_Host("HostSpline->x", index + 1);
-  View_Double_Vector_Host ddd = View_Double_Vector_Host("HostSpline->x", index + 1);
-
-  for (int i = 0; i < index; i++) {
-      error = fscanf(f_adp, "%lf %lf %lf %lf %lf %lf %lf %lf %lf \n",
-                     &a[i], &b[i], &c[i],
-                     &d[i], &db[i], &dc[i],
-                     &dd[i], &ddc[i], &ddd[i]);
-    }
-
-
-  Kokkos::deep_copy(dest.a,a);   
-  Kokkos::deep_copy(dest.b,b);   
-  Kokkos::deep_copy(dest.c,c);   
-  Kokkos::deep_copy(dest.d,d);   
-  Kokkos::deep_copy(dest.db,db);   
-  Kokkos::deep_copy(dest.dc,dc);   
-  Kokkos::deep_copy(dest.dd,dd);   
-  Kokkos::deep_copy(dest.ddc,ddc);   
-  Kokkos::deep_copy(dest.ddd,ddd);   
-
-} */
 
 
 inline AtomTopologyKokkos convert_single_atomTopology_to_Kokkos(const AtomTopology &atom_top) {
@@ -1154,6 +730,79 @@ inline void clearSoA_ADP(SoA_ADP &soa) {
   soa.w_ddc     = DualView_Vector_Double();
   soa.w_ddd     = DualView_Vector_Double();
 }  
+
+struct Trio {
+  double a, b, c;
+};
+
+struct Pair {
+  double a, b;
+};
+
+struct SumTrio {
+  typedef SumTrio                       reducer;
+  typedef Trio                          value_type;
+  typedef Kokkos::View<value_type*, Kokkos::HostSpace,
+                       Kokkos::MemoryUnmanaged> result_view_type;
+
+  value_type& value_ref;
+
+  KOKKOS_INLINE_FUNCTION
+  SumTrio(value_type& dest) : value_ref(dest) {}
+
+  KOKKOS_INLINE_FUNCTION
+  void init(value_type& out) const {
+    out.a = out.b = out.c = 0.0;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void join(value_type& dst, value_type const& src) const {
+    dst.a += src.a;
+    dst.b += src.b;
+    dst.c += src.c;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  value_type& reference() const { return value_ref; }
+
+  KOKKOS_INLINE_FUNCTION
+  result_view_type view() const { return result_view_type(&value_ref, 1); }
+
+  KOKKOS_INLINE_FUNCTION
+  bool references_scalar() const { return true; }
+};
+
+struct SumPair {
+  typedef SumPair                       reducer;
+  typedef Pair                          value_type;
+  typedef Kokkos::View<value_type*, Kokkos::HostSpace,
+                       Kokkos::MemoryUnmanaged> result_view_type;
+
+  value_type& value_ref;
+
+  KOKKOS_INLINE_FUNCTION
+  SumPair(value_type& dest) : value_ref(dest) {}
+
+  KOKKOS_INLINE_FUNCTION
+  void init(value_type& out) const {
+    out.a = out.b = 0.0;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void join(value_type& dst, value_type const& src) const {
+    dst.a += src.a;
+    dst.b += src.b;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  value_type& reference() const { return value_ref; }
+
+  KOKKOS_INLINE_FUNCTION
+  result_view_type view() const { return result_view_type(&value_ref, 1); }
+
+  KOKKOS_INLINE_FUNCTION
+  bool references_scalar() const { return true; }
+};
 
 #endif 
 

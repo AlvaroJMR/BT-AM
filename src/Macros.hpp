@@ -56,6 +56,8 @@ typedef Kokkos::DefaultExecutionSpace              DefaultExecSpace;
 typedef DefaultExecSpace::memory_space             DefaultMemorySpace;
 typedef Kokkos::HostSpace                          HostMemorySpace;
 typedef Kokkos::IndexType<PetscInt>                IndexType;
+typedef Kokkos::TeamPolicy<DefaultExecSpace>       TeamPolicy;
+typedef TeamPolicy::member_type                    Member;
 //typedef DefaultExecSpace::array_layout             DefaultLayout;
 typedef Kokkos::LayoutRight DefaultLayout;
 
