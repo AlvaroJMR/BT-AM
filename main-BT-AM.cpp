@@ -339,7 +339,6 @@ int main(int argc, char **argv) {
     Kokkos::fence();
     View_Double_Matrix_Device mean_q_ij1_all("mean_q_ij1_all", n_mechanical_sites_local, 6);
 
-    Kokkos::printf("Number of mechanical sites: %d n_sites_local: %d\n", n_mechanical_sites_local, n_sites_local);
 
     Kokkos::Timer timer_rho_i_adp_Kokkos;
 
@@ -431,18 +430,20 @@ PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
     
 // Copy back to host to migrateGhostfield
 //! Migrate ghost field (energy density) con Kokkos
-auto mf_rho_Host_copy = Kokkos::create_mirror_view(mf_rho_Default);
+Kokkos::View<PetscScalar*> mf_rho_Host_copy = Kokkos::create_mirror_view(mf_rho_Default);
 Kokkos::deep_copy(mf_rho_Host_copy, mf_rho_Default);
-PetscScalar* mf_rho_ptr_Kokkos = mf_rho_Host_copy.data();
+Kokkos::fence();
 
+PetscScalar* mf_rho_ptr_Kokkos = mf_rho_Host_copy.data();
 
 PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
                                    &idx_q_ptr[n_sites_local], mf_rho_ptr_Kokkos));
 
 Kokkos::deep_copy(mf_rho_Default, mf_rho_Host_copy);    
 
-auto mf_rho_Mirrow = Kokkos::create_mirror_view(mf_rho_Default);
+Kokkos::View<PetscScalar*> mf_rho_Mirrow = Kokkos::create_mirror_view(mf_rho_Default);
 Kokkos::deep_copy(mf_rho_Mirrow, mf_rho_Default);
+Kokkos::fence();
 
 Eigen::Map<VectorType> mf_rho_test(mf_rho_Mirrow.data(), n_sites_local_ghosted);
 
