@@ -39,14 +39,6 @@ extern char OutputFolder[MAXC];
 static char help[] = "Bachelor's thesis: Álvaro Montaño Rosa \n";
 
 
-int detect_vector_width() {
-  if (__builtin_cpu_supports("avx512f")) return 8;   
-  if (__builtin_cpu_supports("avx2"))     return 4;   
-  if (__builtin_cpu_supports("avx"))      return 4;  
-  if (__builtin_cpu_supports("sse2"))     return 2;   
-  return 1;                                      
-}
-
 int main(int argc, char **argv) {
 
   snprintf(OutputFolder, sizeof(OutputFolder), "%s", "./");
@@ -161,25 +153,6 @@ int main(int argc, char **argv) {
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       Compute energy density
      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-
-
-     int omp_threads = omp_get_max_threads();
-     printf("OpenMP: omp_get_max_threads() = %d\n", omp_threads);
- 
-     Kokkos::OpenMP kokkos_exec;
-     int kokkos_threads = kokkos_exec.concurrency();
-     printf("Kokkos(OpenMP backend): concurrency() = %d\n", kokkos_threads);
- 
-     auto def_exec = Kokkos::DefaultExecutionSpace();
-     printf("Kokkos default execution space: %s\n",
-            def_exec.name());
- 
-     const char* omp_env    = std::getenv("OMP_NUM_THREADS");
-     const char* kk_env     = std::getenv("KOKKOS_NUM_THREADS");
-     const char* device_env = std::getenv("KOKKOS_DEVICE");
-     printf("ENV OMP_NUM_THREADS   = %s\n", omp_env    ? omp_env    : "not set");
-     printf("ENV KOKKOS_NUM_THREADS= %s\n", kk_env     ? kk_env     : "not set");
-     printf("ENV KOKKOS_DEVICE     = %s\n", device_env ? device_env : "not set");
 
     //! Get local number of sites in the simulation (without ghost)
     PetscInt n_sites_local = Simulation.n_sites_local;
@@ -908,7 +881,7 @@ Kokkos::Timer timer_S0_i_adp;
 Kokkos::fence();
 double time_S0_i_adp_Kokkos = timer_S0_i_adp_Kokkos.seconds();
 
-Kokkos::Timer timer_S0_i_adp_Kokkos2;
+/*Kokkos::Timer timer_S0_i_adp_Kokkos2;
 PetscScalar_Vector_Default retrieve_S0_results_Default("retrieve_S0_results_Default", n_sites_local);
 
 Kokkos::parallel_for(
@@ -1079,7 +1052,7 @@ Kokkos::parallel_for(
 );
 
 Kokkos::fence();
-double time_S0_i_adp_Kokkos2 = timer_S0_i_adp_Kokkos2.seconds();
+double time_S0_i_adp_Kokkos2 = timer_S0_i_adp_Kokkos2.seconds(); 
 
 Kokkos::parallel_reduce("SumS0_i",
   Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
@@ -1087,12 +1060,12 @@ Kokkos::parallel_reduce("SumS0_i",
     sum += retrieve_S0_results_Default(i);
   },
   L0_Local_Kokkos
-);
+); */
 
 
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_S0_i_adp_MgHx " << time_S0_i_adp << " segundos" << " Resultados: " << L0_local << std::endl;
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
-  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos2 << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
+ // std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos2 << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
 
   
   unsigned int dim = NumberDimensions;
