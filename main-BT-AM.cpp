@@ -855,7 +855,7 @@ Kokkos::Timer timer_S0_i_adp;
 
   double *mean_q_ij1_all_n_local_data = mean_q_ij1_all_n_local.data();
 
-  Kokkos::printf("Antes de S0_i_adp_Kokkos")
+  Kokkos::printf("Antes de S0_i_adp_Kokkos");
   double L0_Local_Kokkos = 0.0;
  /* Kokkos::Timer timer_S0_i_adp_Kokkos;
   Kokkos::parallel_reduce(
