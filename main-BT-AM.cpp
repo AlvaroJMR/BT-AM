@@ -455,7 +455,7 @@ double eigen_variance = ((mf_rho.array() - eigen_mean).square().sum()) / static_
 
 double Kokkos_mean_test = mf_rho_test.mean();
 double Kokkos_variance_test = ((mf_rho_test.array() - Kokkos_mean_test).square().sum())
-                              / static_cast<double>(n_sites_local_ghosted - 1);
+                              / static_cast<double>(n_sites_local_ghosted - 1); 
 
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_rho_i_adp_MgHx " << time << " segundos" << " Resultados: " << eigen_mean << std::endl;
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_rho_i_adp_MgHx_kokkos_Device " << time2 << " segundos" << " Resultados: " << Kokkos_mean_test << std::endl;
@@ -855,8 +855,9 @@ Kokkos::Timer timer_S0_i_adp;
 
   double *mean_q_ij1_all_n_local_data = mean_q_ij1_all_n_local.data();
 
+  Kokkos::printf("Antes de S0_i_adp_Kokkos")
   double L0_Local_Kokkos = 0.0;
-  Kokkos::Timer timer_S0_i_adp_Kokkos;
+ /* Kokkos::Timer timer_S0_i_adp_Kokkos;
   Kokkos::parallel_reduce(
       "EvaluateFreeEntropy", 
       Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
@@ -880,7 +881,7 @@ Kokkos::Timer timer_S0_i_adp;
   
 
 Kokkos::fence();
-double time_S0_i_adp_Kokkos = timer_S0_i_adp_Kokkos.seconds();
+double time_S0_i_adp_Kokkos = timer_S0_i_adp_Kokkos.seconds(); */
 
 /*Kokkos::Timer timer_S0_i_adp_Kokkos2;
 PetscScalar_Vector_Default retrieve_S0_results_Default("retrieve_S0_results_Default", n_sites_local);
@@ -1065,7 +1066,7 @@ Kokkos::parallel_reduce("SumS0_i",
 
 
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_S0_i_adp_MgHx " << time_S0_i_adp << " segundos" << " Resultados: " << L0_local << std::endl;
-  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
+ //std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
  // std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos2 << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
 
   
