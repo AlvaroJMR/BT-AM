@@ -39,13 +39,6 @@ extern char OutputFolder[MAXC];
 static char help[] = "Bachelor's thesis: Álvaro Montaño Rosa \n";
 
 
-int detect_vector_width() {
-  if (__builtin_cpu_supports("avx512f")) return 8;   
-  if (__builtin_cpu_supports("avx2"))     return 4;   
-  if (__builtin_cpu_supports("avx"))      return 4;  
-  if (__builtin_cpu_supports("sse2"))     return 2;   
-  return 1;                                      
-}
 
 int main(int argc, char **argv) {
 
@@ -161,25 +154,6 @@ int main(int argc, char **argv) {
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       Compute energy density
      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-
-
-     int omp_threads = omp_get_max_threads();
-     printf("OpenMP: omp_get_max_threads() = %d\n", omp_threads);
- 
-     Kokkos::OpenMP kokkos_exec;
-     int kokkos_threads = kokkos_exec.concurrency();
-     printf("Kokkos(OpenMP backend): concurrency() = %d\n", kokkos_threads);
- 
-     auto def_exec = Kokkos::DefaultExecutionSpace();
-     printf("Kokkos default execution space: %s\n",
-            def_exec.name());
- 
-     const char* omp_env    = std::getenv("OMP_NUM_THREADS");
-     const char* kk_env     = std::getenv("KOKKOS_NUM_THREADS");
-     const char* device_env = std::getenv("KOKKOS_DEVICE");
-     printf("ENV OMP_NUM_THREADS   = %s\n", omp_env    ? omp_env    : "not set");
-     printf("ENV KOKKOS_NUM_THREADS= %s\n", kk_env     ? kk_env     : "not set");
-     printf("ENV KOKKOS_DEVICE     = %s\n", device_env ? device_env : "not set");
 
     //! Get local number of sites in the simulation (without ghost)
     PetscInt n_sites_local = Simulation.n_sites_local;
@@ -335,11 +309,8 @@ int main(int argc, char **argv) {
     Kokkos::deep_copy(atomTopology_Kokkos_Default, atomTopology_Kokkos_Host);
 
 
-    PetscInt atomSpecie_Index;
-    PetscCall(DMSwarmGetLocalSize(Simulation.atomistic_data, &atomSpecie_Index));
-
-    AtomSpecie_Host atomSpecie_Kokkos_Host(specie_ptr, atomSpecie_Index);
-    AtomSpecie_Default atomSpecie_Kokkos_Default("atomSpecie_Kokkos_Default", atomSpecie_Index);
+    AtomSpecie_Host atomSpecie_Kokkos_Host(specie_ptr, n_sites_local_ghosted);
+    AtomSpecie_Default atomSpecie_Kokkos_Default("atomSpecie_Kokkos_Default", n_sites_local_ghosted);
     Kokkos::deep_copy(atomSpecie_Kokkos_Default, atomSpecie_Kokkos_Host);
 
 
@@ -365,8 +336,6 @@ int main(int argc, char **argv) {
     DevSnapUnmanaged devSnapUM(devSnap.data());
     Kokkos::fence();
     View_Double_Matrix_Device mean_q_ij1_all("mean_q_ij1_all", n_mechanical_sites_local, 6);
-
-    Kokkos::printf("Number of mechanical sites: %d n_sites_local: %d\n", n_mechanical_sites_local, n_sites_local);
 
     Kokkos::Timer timer_rho_i_adp_Kokkos;
 
