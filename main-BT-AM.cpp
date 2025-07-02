@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
           
     
     Kokkos::Timer timer_rho_i_adp;
-    #pragma omp parallel for simd schedule(runtime)
+    #pragma omp parallel for schedule(runtime)
     for (PetscInt mech_site_u = 0; mech_site_u < n_mechanical_sites_local;
          mech_site_u++) {
 
@@ -451,8 +451,8 @@ int main(int argc, char **argv) {
 
   Kokkos::fence();
   double time2K = timer_rho_i_adp_Kokkos2.seconds();
-
-PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
+  PetscBarrier((PetscObject)NULL);
+/*PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
   &idx_q_ptr[n_sites_local], mf_rho_ptr));
 
     
@@ -466,7 +466,7 @@ PetscScalar* mf_rho_ptr_Kokkos = mf_rho_Host_copy.data();
 PetscCall(DMSwarmMigrateGhostField(n_sites_local, n_sites_ghost, 1,
                                    &idx_q_ptr[n_sites_local], mf_rho_ptr_Kokkos));
 
-Kokkos::deep_copy(mf_rho_Default, mf_rho_Host_copy);    
+Kokkos::deep_copy(mf_rho_Default, mf_rho_Host_copy);    */
 
 auto mf_rho_Mirrow = Kokkos::create_mirror_view(mf_rho_Default);
 Kokkos::deep_copy(mf_rho_Mirrow, mf_rho_Default);
