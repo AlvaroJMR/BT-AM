@@ -483,7 +483,7 @@ double V_local_Kokkos = 0.0;
 View_Double_Matrix_Device mean_q_ij1_all_n_local("mean_q_ij1_all", n_sites_local, 6);
 
 Kokkos::Timer timer_V_i_adp_Kokkos;
-   Kokkos::parallel_reduce(
+    Kokkos::parallel_reduce(
     "EvaluatePotentialEnergy", 
     Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
     KOKKOS_LAMBDA(const PetscInt site_u, double& V_u) {
@@ -501,7 +501,7 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
     Kokkos::fence();
     double time_V_i_adp_Kokkos = timer_V_i_adp_Kokkos.seconds();
 
-    PetscScalar_Vector_Default retrieve_V_u_results_Default("retrieve_V_u_results_Default", n_sites_local);
+    /*PetscScalar_Vector_Default retrieve_V_u_results_Default("retrieve_V_u_results_Default", n_sites_local);
 
     Kokkos::Timer timer_V_i_adp_Kokkos2;
     
@@ -632,12 +632,12 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
         sum += retrieve_V_u_results_Default(i);
       },
       V_local_Kokkos
-    );
+    ); */
 
 
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_V_i_adp_MgHx " << time_V_i_adp << " segundos: " << " Resultados: "<< V_local << std::endl;
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
-std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos2 << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
+//std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos2 << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
 
   PetscScalar* stdv_q_ptr;
   PetscCall(DMSwarmGetField(Simulation.atomistic_data, "stdv-q", NULL, NULL,
