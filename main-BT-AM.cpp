@@ -880,7 +880,7 @@ double time_S0_i_adp_Kokkos = timer_S0_i_adp_Kokkos.seconds();
 Kokkos::Timer timer_S0_i_adp_Kokkos2;
 PetscScalar_Vector_Default retrieve_S0_results_Default("retrieve_S0_results_Default", n_sites_local);
 
-Kokkos::parallel_for(
+/* Kokkos::parallel_for(
   "EvaluateFreeEntropy",
   policy,
   KOKKOS_LAMBDA(const Member& team){
@@ -1045,7 +1045,7 @@ Kokkos::parallel_for(
     retrieve_S0_results_Default(site_i) += k_B * S0_i;
   
   }
-);
+); */
 
 Kokkos::fence();
 double time_S0_i_adp_Kokkos2 = timer_S0_i_adp_Kokkos2.seconds();
