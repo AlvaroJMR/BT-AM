@@ -101,11 +101,7 @@ KOKKOS_FUNCTION double cubic_spline(CubicSpline* cs, double x) {
   p = x - p;              // p=x-x_m=x-m*dx
   p = min(p, cs->dx);     // comprobation to know if p>dx
 
-  if (cs->isKernel) {
-    return cs->a_d[m] + (cs->b_d[m] + (cs->c_d[m] + cs->d_d[m] * p) * p) * p;
-  } else {
     return cs->a[m] + (cs->b[m] + (cs->c[m] + cs->d[m] * p) * p) * p;
-  }
 }
 
 /********************************************************************************/
@@ -121,12 +117,8 @@ KOKKOS_FUNCTION double d_cubic_spline(CubicSpline* cs, double x) {
   p = x - p;              // p=x-x_m=x-m*dx
   p = min(p, cs->dx);     // comprobation to know if p>dx
 
-
-    if (cs->isKernel) {
-    return cs->db_d[m] + (cs->dc_d[m] + cs->dd_d[m] * p) * p;
-  } else {
      return cs->db[m] + (cs->dc[m] + cs->dd[m] * p) * p;
-  }
+  
 }
 
 /********************************************************************************/

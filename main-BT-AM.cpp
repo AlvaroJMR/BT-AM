@@ -342,14 +342,13 @@ int main(int argc, char **argv) {
     Kokkos::parallel_for("Active_mech_sites", Kokkos::RangePolicy<DefaultExecSpace, IndexType>(0, n_mechanical_sites_local), KOKKOS_LAMBDA(PetscInt mech_site_u) {
       PetscInt site_u = active_mech_sites_Kokkos_Default(mech_site_u);
   
-      auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all, mech_site_u, Kokkos::ALL());
       AtomTopology topology;
       topology.numneigh       = numneigh_Kokkos_view(site_u);
       topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
                               atom_topology_offsets_view(site_u);
 
        mf_rho_Default(site_u) = evaluate_rho_i_adp_MgHx_kokkos_Device(
-          site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, atomSpecie_Kokkos_Default, topology, mean_q_ij1, devSnapUM);    
+          site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, atomSpecie_Kokkos_Default, topology, devSnapUM);    
   });
 
   Kokkos::fence();
@@ -358,12 +357,22 @@ int main(int argc, char **argv) {
   Kokkos::Timer timer_rho_i_adp_Kokkos2;
 
   TeamPolicy policy(n_mechanical_sites_local, Kokkos::AUTO,Kokkos::AUTO);
+
+  const std::size_t bytes_per_thread = 6 * sizeof(double);
+  policy.set_scratch_size(
+    0,
+    Kokkos::PerTeam(0),
+    Kokkos::PerThread(bytes_per_thread)
+  );
+
   Kokkos::parallel_for("Active_mech_sites", policy,
   KOKKOS_LAMBDA(const Member& team) {
 
     const int mech_site_u = team.league_rank();  
     const PetscInt site_u = active_mech_sites_Kokkos_Default(mech_site_u);
-    auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all, mech_site_u, Kokkos::ALL());
+    double* mean_q_ij1 = static_cast<double*>(
+      team.thread_scratch(0).get_shmem(bytes_per_thread)
+    );
 
     const unsigned int numneigh_site_i = numneigh_Kokkos_view(site_u);
     const PetscInt* mech_neighs_i = mech_neighs_ptr_Kokkos_view.data() +
@@ -379,9 +388,9 @@ int main(int argc, char **argv) {
     }
 
     double rho_i = 0.0;
-    /* Kokkos::Array<double, 2>  xi_ij1 = Kokkos::Array<double, 2> {xi_i, 0};
-    Kokkos::Array<unsigned int, 2>  sites_ij1 = Kokkos::Array<unsigned int, 2> {site_u, 0};
-    AtomicSpecie spc_ij1[2] = {spc_i, {}}; */
+    //Kokkos::Array<double, 2>  xi_ij1 = Kokkos::Array<double, 2> {xi_i, 0};
+    //Kokkos::Array<unsigned int, 2>  sites_ij1 = Kokkos::Array<unsigned int, 2> {site_u, 0};
+    //AtomicSpecie spc_ij1[2] = {spc_i, {}};
       Kokkos::parallel_reduce(
         Kokkos::ThreadVectorRange(team, numneigh_site_i),
         [&](int idx, double& acc){
@@ -397,16 +406,16 @@ int main(int argc, char **argv) {
           int dof_table_ij[4] = {1, 0, 0, 1};
       
           concatenateVectors(mean_q_i, mean_q_j1, mean_q_ij1);
-          /*xi_ij1[1] = xi_j1;
-          sites_ij1[1] = site_j1;
-          spc_ij1[1] = spc_j1; */
+          // xi_ij1[1] = xi_j1;
+          // sites_ij1[1] = site_j1;
+          // spc_ij1[1] = spc_j1; 
           Kokkos::Array<double, 2>  xi_ij1 = Kokkos::Array<double, 2> {xi_i, xi_j1};
           Kokkos::Array<unsigned int, 2>  sites_ij1 = Kokkos::Array<unsigned int, 2> {site_u, site_j1};
           AtomicSpecie spc_ij1[2] = {spc_i, spc_j1};
 
           double rho_ij = 0.0;
       
-          rho_ij_adp_MgHx_dispatcher functions_rho_ij { Functions_Enum::FK, &rho_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, devSnapUM.data() };
+          rho_ij_adp_MgHx_dispatcher functions_rho_ij { Functions_Enum::FK, &rho_ij, xi_ij1.data(), mean_q_ij1, spc_ij1, devSnapUM.data() };
           
           functions_rho_ij();
           acc += rho_ij;
@@ -475,7 +484,7 @@ site_u, mean_q, xi, mf_rho, specie_ptr, atom_topology[site_u]);
 
 //! @brief Update local contribution of the residual equation
 V_local += V_u;
-} 
+}
 #pragma omp barrier
 
 double time_V_i_adp= timer_V_i_adp.seconds();
@@ -487,32 +496,39 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
     "EvaluatePotentialEnergy", 
     Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
     KOKKOS_LAMBDA(const PetscInt site_u, double& V_u) {
-      auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
       AtomTopology topology;
       topology.numneigh       = numneigh_Kokkos_view(site_u);
       topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
-                              atom_topology_offsets_view(site_u);      
+                              atom_topology_offsets_view(site_u);   
         V_u += evaluate_V_i_adp_MgHx_Kokkos(
             site_u, mean_q_Kokkos_Default, xi_Kokkos_Default, mf_rho_Default, 
-            atomSpecie_Kokkos_Default, topology, devSnapUM, mean_q_ij1);
+            atomSpecie_Kokkos_Default, topology, devSnapUM);
     },
     V_local_Kokkos);
 
     Kokkos::fence();
     double time_V_i_adp_Kokkos = timer_V_i_adp_Kokkos.seconds();
 
-    /*PetscScalar_Vector_Default retrieve_V_u_results_Default("retrieve_V_u_results_Default", n_sites_local);
+    PetscScalar_Vector_Default retrieve_V_u_results_Default("retrieve_V_u_results_Default", n_sites_local);
 
     Kokkos::Timer timer_V_i_adp_Kokkos2;
+
+    TeamPolicy policy4(n_mechanical_sites_local, Kokkos::AUTO,Kokkos::AUTO);
+
+    const std::size_t bytes_per_thread4 = 6 * sizeof(double);
+    policy4.set_scratch_size(
+      0,
+      Kokkos::PerTeam(0),
+      Kokkos::PerThread(bytes_per_thread4)
+    );
     
     Kokkos::parallel_for(
       "EvaluatePotentialEnergy",
-      policy,
+      policy4,
       KOKKOS_LAMBDA(const Member& team){
 
         unsigned int dim = NumberDimensions;
         const int site_i  = team.league_rank();
-        auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_i, Kokkos::ALL());
         AtomTopology topology;
         topology.numneigh       = numneigh_Kokkos_view(site_i);
         topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
@@ -529,6 +545,10 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
         double V_dip_i = 0.0;    
         double V_quad_i = 0.0;   
         double V_i = 0.0;        
+
+        double* mean_q_ij1 = static_cast<double*>(
+          team.thread_scratch(0).get_shmem(bytes_per_thread)
+        );
         
         unsigned int numneigh_site_i = topology.numneigh;
         const PetscInt* mech_neighs_i = topology.mech_neighs_ptr;
@@ -542,7 +562,7 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
         SumTrio trioReducer(localT);
     
         Kokkos::parallel_reduce(
-          Kokkos::ThreadVectorRange(team, numneigh_site_i),
+          Kokkos::TeamThreadRange (team, numneigh_site_i),
           [&](unsigned idx_j1, Trio& accThread){
         unsigned int site_j1 = mech_neighs_i[idx_j1];
         AtomicSpecie spc_j1 = atomSpecie_Kokkos_Default(site_j1);
@@ -560,7 +580,7 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
         double V_pair_ij = 0.0;
 
         {         
-        V_pair_ij_adp_MgHx_dispatcher function_V_pair_ij { Functions_Enum::FK, &V_pair_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, devSnapUM.data() };
+        V_pair_ij_adp_MgHx_dispatcher function_V_pair_ij { Functions_Enum::FK, &V_pair_ij, xi_ij1.data(), mean_q_ij1, spc_ij1, devSnapUM.data() };
         function_V_pair_ij();
         }
         accThread.c += V_pair_ij;
@@ -589,14 +609,14 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
         
           double V_dip_ij1j2 = 0.0;
           { 
-            V_dipole_ij1j2_dispatcher function_V_dipole_ij1j2 { Functions_Enum::FK, &V_dip_ij1j2, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, devSnapUM.data() };
+            V_dipole_ij1j2_dispatcher function_V_dipole_ij1j2 { Functions_Enum::FK, &V_dip_ij1j2, xi_ij1.data(), mean_q_ij1, spc_ij1, devSnapUM.data() };
             function_V_dipole_ij1j2();
           }
           accThreadVector.a += factor_j1j2 * V_dip_ij1j2;
         
           double V_quad_ij1j2 = 0.0;
           {
-            V_quadrupole_ij1j2_dispatcher function_V_quadrupole_ij1j2 { Functions_Enum::FK, &V_quad_ij1j2, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, devSnapUM.data() };
+            V_quadrupole_ij1j2_dispatcher function_V_quadrupole_ij1j2 { Functions_Enum::FK, &V_quad_ij1j2, xi_ij1.data(), mean_q_ij1, spc_ij1, devSnapUM.data() };
             function_V_quadrupole_ij1j2();  
           }
           accThreadVector.b += factor_j1j2 * V_quad_ij1j2;
@@ -621,7 +641,7 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
         retrieve_V_u_results_Default(site_i) = V_i;
       
       }
-    );    
+    );
 
     Kokkos::fence();
     double time_V_i_adp_Kokkos2 = timer_V_i_adp_Kokkos2.seconds();
@@ -632,12 +652,12 @@ Kokkos::Timer timer_V_i_adp_Kokkos;
         sum += retrieve_V_u_results_Default(i);
       },
       V_local_Kokkos
-    ); */
+    );
 
 
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_V_i_adp_MgHx " << time_V_i_adp << " segundos: " << " Resultados: "<< V_local << std::endl;
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
-//std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos2 << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos2 << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
 
   PetscScalar* stdv_q_ptr;
   PetscCall(DMSwarmGetField(Simulation.atomistic_data, "stdv-q", NULL, NULL,
@@ -692,7 +712,6 @@ std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones 
 
   Kokkos::parallel_for("Active_mech_sites", Kokkos::RangePolicy<DefaultExecSpace, IndexType>(0, n_sites_local), KOKKOS_LAMBDA(PetscInt n_sites_local_u) {
 
-    auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, n_sites_local_u, Kokkos::ALL());
     double result = 0.0;
     AtomTopology topology;
     topology.numneigh       = numneigh_Kokkos_view(n_sites_local_u);
@@ -702,18 +721,27 @@ std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones 
       mf_rho_Default(n_sites_local_u)  = evaluate_mf_rho_i_adp_MgHx_Kokkos(
       n_sites_local_u, mean_q_Kokkos_Default, stdv_q_ptr_Kokkos_Default,
        xi_Kokkos_Default, atomSpecie_Kokkos_Default, 
-       topology, 
-       mean_q_ij1, devSnapUM,
-      ctx(n_sites_local_u), multipole_integral);
+       topology, devSnapUM,
+      ctx(n_sites_local_u), multipole_integral); 
 
-}); 
+});
 
 Kokkos::fence();
+
+TeamPolicy policy2(n_sites_local, Kokkos::AUTO,Kokkos::AUTO);
+
+const std::size_t bytes_per_thread2 = MaxNumSites * ( 1 + MaxNumSites * (2 + NumberDimensions * NumberDimensions)) * sizeof(int) + sizeof(gaussian_measure_ctx_kokkos_s);
+policy2.set_scratch_size(
+  0,
+  Kokkos::PerTeam(0),
+  Kokkos::PerThread(bytes_per_thread2)
+);      
+
 double time_mf_rho_i_adp_Kokkos = timer_mf_rho_i_adp_Kokkos.seconds();
 
 Kokkos::Timer timer_mf_rho_i_adp_Kokkos2;
 
-Kokkos::parallel_for("Active_mech_sites", policy,
+Kokkos::parallel_for("Active_mech_sites", policy2,
   KOKKOS_LAMBDA(const Member& team){
 
     const int mech_site_u = team.league_rank();  
@@ -723,7 +751,20 @@ Kokkos::parallel_for("Active_mech_sites", policy,
     topology.numneigh       = numneigh_Kokkos_view(site_u);
     topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
                               atom_topology_offsets_view(site_u);
+                              
+    char* mem = static_cast<char*>(
+      team.team_scratch(0).get_shmem(bytes_per_thread2)
+    );
+    gaussian_measure_ctx_kokkos_s* ctxs = reinterpret_cast<gaussian_measure_ctx_kokkos_s*>(mem);    
+    int* dof_table = reinterpret_cast<int*>(mem + sizeof(gaussian_measure_ctx_kokkos_s));
+    int* gp_board = reinterpret_cast<int*>(mem + sizeof(gaussian_measure_ctx_kokkos_s) + MaxNumSites * MaxNumSites *sizeof(int) );
+    int* dof_table_aux = reinterpret_cast<int*>(mem + sizeof(gaussian_measure_ctx_kokkos_s) + (MaxNumSites * MaxNumSites * NumberDimensions * NumberDimensions + MaxNumSites * MaxNumSites) * sizeof(int));
+    int* active_dof = reinterpret_cast<int*>(mem + sizeof(gaussian_measure_ctx_kokkos_s) + (MaxNumSites * MaxNumSites * NumberDimensions * NumberDimensions + 2 * (MaxNumSites * MaxNumSites)) * sizeof(int));
 
+    ctxs->dof_table = dof_table;
+    ctxs->gp_board = gp_board;
+    ctxs->dof_table_aux = dof_table_aux;
+    ctxs->active_dof = active_dof;
   
     unsigned int numneigh_site_i = topology.numneigh;
     const PetscInt* mech_neighs_i = topology.mech_neighs_ptr;
@@ -761,21 +802,23 @@ Kokkos::parallel_for("Active_mech_sites", policy,
           double stdv_q_ij1[2] = {stdv_q_i, stdv_q_j1};
 
           double mf_rho_ij = 0.0;
-          fill_out_gaussian_measure_Kokkos(mean_q_ij1.data(), stdv_q_ij1,
-            xi_ij1.data(), spc_ij1, dof_table_ij, 2, &ctx(mech_site_u));
+          fill_out_gaussian_measure_Kokkos_s(mean_q_ij1.data(), stdv_q_ij1,
+            xi_ij1.data(), spc_ij1, dof_table_ij, 2, ctxs);
+  
           {
             rho_ij_adp_MgHx_dispatcher function;  
             if (multipole_integral) {
-              meanfield_integral_mp_Kokkos<rho_ij_adp_MgHx_dispatcher>(&mf_rho_ij, &ctx(mech_site_u), devSnapUM.data(), function);
+              meanfield_integral_mp_Kokkos<rho_ij_adp_MgHx_dispatcher>(&mf_rho_ij, ctxs, devSnapUM.data(), function);
             } else {
-              meanfield_integral_gh3th_Kokkos<rho_ij_adp_MgHx_dispatcher>(&mf_rho_ij, &ctx(mech_site_u), devSnapUM.data(), function);
+              meanfield_integral_gh3th_Kokkos_s<rho_ij_adp_MgHx_dispatcher>(&mf_rho_ij, ctxs, devSnapUM.data(), function);
             }
           }  
           acc += mf_rho_ij;
+
         },
         mf_rho_i
       );
-  
+
       mf_rho_Default(site_u) = mf_rho_i;
     }
   );
@@ -857,7 +900,6 @@ Kokkos::Timer timer_S0_i_adp;
       Kokkos::RangePolicy<DefaultExecSpace>(0, n_sites_local),
       KOKKOS_LAMBDA(const PetscInt site_u, double& local_entropy) {
 
-        auto mean_q_ij1 = Kokkos::subview(mean_q_ij1_all_n_local, site_u, Kokkos::ALL());
         AtomTopology topology;
         topology.numneigh       = numneigh_Kokkos_view(site_u);
         topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
@@ -865,14 +907,12 @@ Kokkos::Timer timer_S0_i_adp;
           double S0_u = evaluate_S0_i_adp_MgHx_Kokkos(
               site_u, mean_q_Kokkos_Default, stdv_q_ptr_Kokkos_Default, xi_Kokkos_Default, 
               mf_rho_Default, beta_ptr_Kokkos_Default, gamma_ptr_Kokkos_Default, atomSpecie_Kokkos_Default, 
-              topology, mean_q_ij1, devSnapUM, element_mass_Device, ctx(site_u), multipole_integral);
+              topology, devSnapUM, element_mass_Device, ctx(site_u), multipole_integral);
   
           //! @brief Update local contribution of the residual equation
           local_entropy += k_B * S0_u;
       },
       L0_Local_Kokkos);
-
-  
 
 Kokkos::fence();
 double time_S0_i_adp_Kokkos = timer_S0_i_adp_Kokkos.seconds();
@@ -880,7 +920,7 @@ double time_S0_i_adp_Kokkos = timer_S0_i_adp_Kokkos.seconds();
 Kokkos::Timer timer_S0_i_adp_Kokkos2;
 PetscScalar_Vector_Default retrieve_S0_results_Default("retrieve_S0_results_Default", n_sites_local);
 
-/* Kokkos::parallel_for(
+ Kokkos::parallel_for(
   "EvaluateFreeEntropy",
   policy,
   KOKKOS_LAMBDA(const Member& team){
@@ -920,7 +960,7 @@ PetscScalar_Vector_Default retrieve_S0_results_Default("retrieve_S0_results_Defa
     SumTrio trioReducer(localT);
 
     Kokkos::parallel_reduce(
-      Kokkos::ThreadVectorRange(team, numneigh_site_i),
+      Kokkos::TeamThreadRange (team, numneigh_site_i),
       [&](unsigned idx_j1, Trio& accThread){
     unsigned int site_j1 = mech_neighs_i[idx_j1];
     AtomicSpecie spc_j1 = atomSpecie_Kokkos_Default(site_j1);
@@ -1045,7 +1085,7 @@ PetscScalar_Vector_Default retrieve_S0_results_Default("retrieve_S0_results_Defa
     retrieve_S0_results_Default(site_i) += k_B * S0_i;
   
   }
-); */
+);
 
 Kokkos::fence();
 double time_S0_i_adp_Kokkos2 = timer_S0_i_adp_Kokkos2.seconds();

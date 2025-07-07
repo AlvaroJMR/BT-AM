@@ -78,6 +78,31 @@ typedef struct {
 
 } gaussian_measure_ctx_kokkos;
 
+
+typedef struct {
+
+  int num_sites;
+
+  int intergal_dim;
+
+  int* dof_table;
+
+  int* dof_table_aux;
+
+  int* gp_board;
+
+  int* active_dof;
+
+  double *mean_q_ij;
+
+  double *stddev_q_ij;
+
+  double *xi_ij;
+
+  AtomicSpecie *spc;
+
+} gaussian_measure_ctx_kokkos_s;
+
 /**
  * @brief Fill out integral context
  *
@@ -187,6 +212,94 @@ i_new++;
 }
 
 ctx->intergal_dim = counter * dim;
+
+}
+
+/***************************************************************************************** */
+
+KOKKOS_INLINE_FUNCTION void fill_out_gaussian_measure_Kokkos_s (double* mean_q_ij,
+  double* stddev_q_ij,
+  double* xi_ij, AtomicSpecie* spc,
+  int* dof_table,
+  unsigned int NumSites,
+  gaussian_measure_ctx_kokkos_s* ctxs) {
+
+unsigned int dim = NumberDimensions;
+
+ctxs->num_sites = NumSites;
+ctxs->mean_q_ij = mean_q_ij;
+ctxs->stddev_q_ij = stddev_q_ij;
+ctxs->xi_ij = xi_ij;
+ctxs->spc = spc;
+
+
+for (size_t i = 0; i < NumSites * NumSites; ++i) {
+  ctxs->dof_table_aux[i] = 0;
+}
+
+for (size_t i = 0; i < NumSites; ++i) {
+  ctxs->active_dof[i] = 0;
+}
+
+for (size_t i = 0; i < NumSites * NumSites * NumberDimensions * NumberDimensions; ++i) {
+  ctxs->gp_board[i] = 0;
+}
+
+
+//! Copy dof table
+for (unsigned int i = 0; i < NumSites; i++) {
+for (unsigned int j = 0; j < NumSites; j++) {
+  ctxs->dof_table[i * NumSites + j] = dof_table[i * NumSites + j];
+  ctxs->dof_table_aux[i * NumSites + j] = dof_table[i * NumSites + j];
+}
+}
+
+//! Remove redundant dofs in dof table
+for (unsigned int i = 0; i < NumSites; i++) {
+
+for (unsigned int j = 0; j < NumSites; j++) {
+
+if (j != i) {
+for (unsigned int k = 0; k < NumSites; k++) {
+if (ctxs->dof_table_aux[j * NumSites + k] ==
+  ctxs->dof_table_aux[i * NumSites + k]) {
+  ctxs->dof_table_aux[j * NumSites + k] = 0;
+}
+}
+}
+}
+}
+
+int counter = 0;
+for (unsigned int i = 0; i < NumSites; i++) {
+int counter_i = 0;
+for (unsigned int j = 0; j < NumSites; j++) {
+counter_i += ctxs->dof_table_aux[i * NumSites + j];
+}
+if (counter_i > 0) {
+  ctxs->active_dof[i] = 1;
+counter++;
+}
+}
+
+unsigned int NumRows = counter * dim;
+unsigned int NumCols = NumSites * dim;
+
+int i_new = 0;
+for (unsigned int i = 0; i < NumSites; i++) {
+if (ctxs->active_dof[i]) {
+for (unsigned int j = 0; j < NumSites; j++) {
+if (ctxs->dof_table_aux[i * NumSites + j]) {
+for (unsigned int k = 0; k < dim; k++) {
+  ctxs->gp_board[i_new * dim * NumCols + j * dim + k * NumCols + k] = 1;
+}
+}
+}
+i_new++;
+}
+}
+
+ctxs->intergal_dim = counter * dim;
 
 }
 

@@ -691,7 +691,6 @@ KOKKOS_INLINE_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const 
       } else {
       u_ij2 = getSpline(AdpType::MgH, SplineType::u, u_ij2, soADevice);
       }
-      
       //! Compute parameters
       for (unsigned int alpha = 0; alpha < dim; alpha++) {
       r_ij1[alpha] = q[dim * i + alpha] - q[dim * j1 + alpha];
@@ -702,11 +701,9 @@ KOKKOS_INLINE_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const 
       }
       double norm_r_ij1 = sqrt(r2_ij1);
       double norm_r_ij2 = sqrt(r2_ij2);
-      
       double nn_u_ij1 = n[i] * n[j1] * cubic_spline_Kokkos(&u_ij1, norm_r_ij1);
       double nn_u_ij2 = n[i] * n[j2] * cubic_spline_Kokkos(&u_ij2, norm_r_ij2);
-      
-      *V_dipole_ij1j2 = (1.0 / 2.0) * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
+      *V_dipole_ij1j2 = 0.5 * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
       
 }
   
@@ -756,10 +753,9 @@ KOKKOS_INLINE_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_i
       
       double nn_w_ij1 = n[i] * n[j1] * cubic_spline_Kokkos(&w_ij1, norm_r_ij1);
       double nn_w_ij2 = n[i] * n[j2] * cubic_spline_Kokkos(&w_ij2, norm_r_ij2);
-      
       *V_quadrupole_ij1_ij2 =
-      (1.0 / 2.0) * nn_w_ij1 * nn_w_ij2 * dsqr(r_ij1__dot__r_ij2) -
-      (1.0 / 6.0) * nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2;
+      0.5 * nn_w_ij1 * nn_w_ij2 * dsqr(r_ij1__dot__r_ij2) -
+       (nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2) / 6.0;
 }
   
 KOKKOS_FUNCTION void d2_rho_ij_dq2_FD_Kokkos(int direction, double* d2_rho_ij_dq,
@@ -832,7 +828,7 @@ if(r2_ij == 0.0){
 double norm_r_ij = sqrt(r2_ij);
 double norm_r_ij_m1 = 1.0 / norm_r_ij;
 
-double n_d_rho_ij = n[j] * d_cubic_spline(&rho_j, norm_r_ij);
+double n_d_rho_ij = n[j] * d_cubic_spline_Kokkos(&rho_j, norm_r_ij);
 
 
 //! Direction i

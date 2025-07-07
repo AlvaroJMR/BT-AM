@@ -233,8 +233,7 @@
    const PetscScalar_Vector_Default& rho,
    const AtomSpecie_Default &specie,
    const AtomTopology atom_topology_i,
-   const DevSnapUnmanaged &soADevice,
-   const aux_Vector mean_q_ij1)  //!
+   const DevSnapUnmanaged &soADevice)  //!
  {
  
  unsigned int dim = NumberDimensions;
@@ -251,6 +250,8 @@
  unsigned int numneigh_site_i = atom_topology_i.numneigh;
  const PetscInt *mech_neighs_i = atom_topology_i.mech_neighs_ptr;
  
+ double mean_q_ij1[9]; 
+
  //! @brief Get atomistic information of site i
  AtomicSpecie spc_i = specie(site_i);
  double xi_i = xi(site_i);
@@ -259,7 +260,6 @@
  if (xi_i < min_occupancy) {
  return 0.0;
  }
- 
  for (unsigned int idx_j1 = 0; idx_j1 < numneigh_site_i; idx_j1++) {
  
  //! @brief Get atomistic information of site j
@@ -281,7 +281,7 @@
   
  //! @brief Compute meanfield pairing term
  double V_pair_ij = 0.0;
- V_pair_ij_adp_MgHx_dispatcher function_V_pair_ij { Functions_Enum::FK, &V_pair_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, soADevice.data() };
+ V_pair_ij_adp_MgHx_dispatcher function_V_pair_ij { Functions_Enum::FK, &V_pair_ij, xi_ij1.data(), mean_q_ij1, spc_ij1, soADevice.data() };
  function_V_pair_ij();
  V_pair_i += V_pair_ij;
  
@@ -312,17 +312,16 @@
  //! Compute meanfield dipole angular term
  double V_dip_ij1j2 = 0.0;
  
- V_dipole_ij1j2_dispatcher function_V_dipole_ij1j2 { Functions_Enum::FK, &V_dip_ij1j2, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, soADevice.data() };
+ V_dipole_ij1j2_dispatcher function_V_dipole_ij1j2 { Functions_Enum::FK, &V_dip_ij1j2, xi_ij1.data(), mean_q_ij1, spc_ij1, soADevice.data() };
  function_V_dipole_ij1j2();
  
- V_dip_i += factor_j1j2 * V_dip_ij1j2;
- 
+ V_dip_i += factor_j1j2 * V_dip_ij1j2; 
  //! Compute meanfield quadrupole angular term
  double V_quad_ij1j2 = 0.0;
  
- V_quadrupole_ij1j2_dispatcher function_V_quadrupole_ij1j2 { Functions_Enum::FK, &V_quad_ij1j2, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, soADevice.data() };
- function_V_quadrupole_ij1j2();         
- 
+ V_quadrupole_ij1j2_dispatcher function_V_quadrupole_ij1j2 { Functions_Enum::FK, &V_quad_ij1j2, xi_ij1.data(), mean_q_ij1, spc_ij1, soADevice.data() };
+ function_V_quadrupole_ij1j2();   
+  
  V_quad_i += factor_j1j2 * V_quad_ij1j2;
  }
  }
@@ -430,7 +429,6 @@
    const PetscScalar_Vector_Default &xi,
    const AtomSpecie_Default &specie,
    const AtomTopology atom_topology_i,
-   const aux_Vector mean_q_ij1,
    const DevSnapUnmanaged &soADevice,
    const gaussian_measure_ctx_kokkos &ctx,
    const bool multipole_integral  //! If the integral is multipole or GH3TH      
@@ -444,8 +442,10 @@
  //! @brief Get topologic information of site i
  unsigned int numneigh_site_i = atom_topology_i.numneigh;
  const PetscInt *mech_neighs_i = atom_topology_i.mech_neighs_ptr;
- 
- //! @brief Get atomistic information of site i
+
+ double mean_q_ij1[6]; 
+
+  //! @brief Get atomistic information of site i
  AtomicSpecie spc_i = specie(site_i);
  double xi_i = xi(site_i);
  double stdv_q_i = stdv_q(site_i);
@@ -482,18 +482,20 @@
  int dof_table_ij[4] = {1, 0, 0, 1};
  
  //! @brief Create measure/functions
- fill_out_gaussian_measure_Kokkos(mean_q_ij1.data(), stdv_q_ij1,
+ fill_out_gaussian_measure_Kokkos(mean_q_ij1, stdv_q_ij1,
    xi_ij1.data(), spc_ij1, dof_table_ij, 2, &ctx);
  
  //! @brief Compute meanfield energy density to evaluate the embeded energy
  double mf_rho_ij = 0.0;
  {
+
  rho_ij_adp_MgHx_dispatcher function;  
  if (multipole_integral) {
    meanfield_integral_mp_Kokkos<rho_ij_adp_MgHx_dispatcher>(&mf_rho_ij, &ctx, soADevice.data(), function);
  } else {
    meanfield_integral_gh3th_Kokkos<rho_ij_adp_MgHx_dispatcher>(&mf_rho_ij, &ctx, soADevice.data(), function);
  }
+
  }
  mf_rho_i += mf_rho_ij;
  

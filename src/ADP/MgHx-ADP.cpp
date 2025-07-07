@@ -1153,7 +1153,7 @@ if(r2_ij == 0.0){
 
 double norm_r_ij = sqrt(r2_ij);
 double norm_r_ij_m1 = 1.0 / norm_r_ij;
-double nn_d_pair_ij = n[i] * n[j] * d_cubic_spline(&pair_ij, norm_r_ij);
+double nn_d_pair_ij = n[i] * n[j] * d_cubic_spline_Kokkos(&pair_ij, norm_r_ij);
 
 //! Direction i
 if (direction == i) {

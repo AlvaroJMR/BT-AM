@@ -36,7 +36,6 @@
     const PetscScalar_Vector_Default &xi,
     const AtomSpecie_Default &specie,
     const AtomTopology atom_topology_i,
-    const aux_Vector mean_q_ij1,
     const DevSnapUnmanaged &soADevice) {
     
     //! @brief Auxiliar variables
@@ -73,6 +72,8 @@
   
       //! @brief Create dof table
       int dof_table_ij[4] = {1, 0, 0, 1};
+
+      double mean_q_ij1[6]; 
   
       //! @brief Fill data for the measure (i,j1)
       concatenateVectors(mean_q_i, mean_q_j1, mean_q_ij1);
@@ -84,7 +85,7 @@
       double rho_ij = 0.0;
   
       //! Create functions
-      rho_ij_adp_MgHx_dispatcher functions_rho_ij { Functions_Enum::FK, &rho_ij, xi_ij1.data(), mean_q_ij1.data(), spc_ij1, soADevice.data() };
+      rho_ij_adp_MgHx_dispatcher functions_rho_ij { Functions_Enum::FK, &rho_ij, xi_ij1.data(), mean_q_ij1, spc_ij1, soADevice.data() };
       
       functions_rho_ij();
       rho_i += rho_ij;
@@ -112,8 +113,7 @@
      const PetscScalar_Vector_Default& rho,
      const AtomSpecie_Default &specie,
      const AtomTopology atom_topology_i,
-     const DevSnapUnmanaged &soADevice,
-     const aux_Vector mean_q_ij1);
+     const DevSnapUnmanaged &soADevice);
        
  
  double evaluate_mf_rho_i_adp_MgHx(unsigned int site_i,            //!
@@ -129,7 +129,6 @@
    const PetscScalar_Vector_Default &xi,
    const AtomSpecie_Default &specie,
    const AtomTopology atom_topology_i,
-   const aux_Vector mean_q_ij1,
    const DevSnapUnmanaged &soADevice,
    const gaussian_measure_ctx_kokkos &ctx,
    const bool multipole_integral  //! If the integral is multipole or GH3TH  
@@ -175,7 +174,6 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
         const PetscScalar_Vector_Default &gamma,        //!
         const AtomSpecie_Default &specie,
         const AtomTopology atom_topology_i,
-        const aux_Vector mean_q_ij1,
         const DevSnapUnmanaged &soADevice,
         const View_Double_Vector_Device element_mass,
         const gaussian_measure_ctx_kokkos &ctx,
@@ -208,6 +206,8 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
       double gamma_i = gamma(site_i);
       AtomicSpecie spc_i = specie(site_i);
       double m_i = unit_change_uma * xi_i * element_mass(spc_i);
+
+      double mean_q_ij1 [9];
       
       //! If the site is empty, skip from the evaluation
       if (xi_i < min_occupancy) {
@@ -240,7 +240,7 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
       
       //! @brief Create measure/functions
       
-      fill_out_gaussian_measure_Kokkos(mean_q_ij1.data(), stdv_q_ij1,
+      fill_out_gaussian_measure_Kokkos(mean_q_ij1, stdv_q_ij1,
         xi_ij1.data(), spc_ij1, dof_table_ij, 2, &ctx);      
             
       //! @brief Compute meanfield pairing term
@@ -331,7 +331,7 @@ KOKKOS_INLINE_FUNCTION double evaluate_S0_i_adp_MgHx_Kokkos(unsigned int site_i,
       } else if (spc_i == H) {
       embed_ii = getSpline(AdpType::HH, SplineType::embed, embed_ii, soADevice.data());
       }
-      double mf_F_i = cubic_spline(&embed_ii, mf_rho_i);
+      double mf_F_i = cubic_spline_Kokkos(&embed_ii, mf_rho_i);
       V0_embed_i = xi_i * mf_F_i;
       
       //! @brief Add up each contribution to the meanfield potential

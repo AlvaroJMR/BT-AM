@@ -18,10 +18,10 @@ void concatenateVectors(const Input_View &v1,
     auto n1 = v1.extent(0);
     auto n2 = v2.extent(0);
     for (size_t i = 0; i < n1; i++) {
-        out(i) = static_cast<typename Output_View::value_type>(v1(i));
+        out[i] = (v1(i));
     }
     for (size_t i = 0; i < n2; i++) {
-        out(n1 + i) = static_cast<typename Output_View::value_type>(v2(i));
+        out[n1 + i] = v2(i);
     }
 }
 
@@ -59,11 +59,10 @@ void multi_sum_scaled (const DestView dest,
   }
 }
 
-template<typename T>
 KOKKOS_INLINE_FUNCTION
-double dsqr(T a) {
-  double da = static_cast<double>(a);
-  return (da == 0.0) ? 0.0 : da * da;
+double dsqr(double x) {
+  double t = x;                            
+  return (t == 0.0) ? 0.0 : t * t;
 }
 
 
