@@ -25,9 +25,13 @@ PetscMPIInt rank_MPI = 0;
 PetscMPIInt size_MPI = 1;
 
 //! Number of MPI partitions in x,y,z directions
-PetscInt ndiv_mesh_X = 3;
-PetscInt ndiv_mesh_Y = 3;
-PetscInt ndiv_mesh_Z = 3;
+PetscInt ndiv_mesh_X = PETSC_DECIDE;
+PetscInt ndiv_mesh_Y = PETSC_DECIDE;
+PetscInt ndiv_mesh_Z = PETSC_DECIDE;
+
+PetscInt size_MPI_X = PETSC_DECIDE; 
+PetscInt size_MPI_Y = PETSC_DECIDE; 
+PetscInt size_MPI_Z = PETSC_DECIDE;
 
 /*********************************/
 /** PARAMETERS FOR PETSC SOLVER **/
