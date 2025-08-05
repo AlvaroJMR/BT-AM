@@ -68,9 +68,9 @@ int main(int argc, char **argv)
       ndiv_mesh_Y = 400;
       ndiv_mesh_Z = 400;
 
-      size_MPI_X = 2;
-      size_MPI_Y = 2;
-      size_MPI_Z = 2;
+      size_MPI_X = 1;
+      size_MPI_Y = 1;
+      size_MPI_Z = 1;
 
       const char Inputs[10000] = "inputs";
       const char SimulationFile[10000] =
@@ -473,7 +473,7 @@ int main(int argc, char **argv)
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_rho_i_adp_MgHx " << time << " segundos" << " Resultados: " << eigen_mean << std::endl;
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_rho_i_adp_MgHx_kokkos_Device " << time2 << " segundos" << " Resultados: " << Kokkos_mean_test << std::endl;
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_rho_i_adp_MgHx_kokkos_Device " << time2K << " segundos" << " Resultados: " << Kokkos_mean_test << std::endl;          
-std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y SIMD explicito: evaluate_rho_i_adp_MgHx_kokkos_Device_SIMD " << time3 << " segundos" << " Resultados: " << Kokkos_mean_test << std::endl;          
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y reorganización SIMD : evaluate_rho_i_adp_MgHx_kokkos_Device_SIMD " << time3 << " segundos" << " Resultados: " << Kokkos_mean_test << std::endl;          
 
   
   // PetscCall(DMSwarmRestoreField(Simulation.atomistic_data, "idx", NULL, NULL, (void**)&idx_q_ptr));
@@ -687,7 +687,7 @@ std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones 
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_V_i_adp_MgHx " << time_V_i_adp << " segundos: " << " Resultados: "<< V_local << std::endl;
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos << " segundos: " << " Resultados: "<< V_local_Kokkos << std::endl;
 std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos2 << " segundos: " << " Resultados: "<< V_local_Kokkos_ThreadVectorRange << std::endl;
-std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y SIMD explicito: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos_SIMD << " segundos: " << " Resultados: "<< V_local_Kokkos_SIMD << std::endl;
+std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y reorganización SIMD: evaluate_V_i_adp_MgHx_Kokkos " << time_V_i_adp_Kokkos_SIMD << " segundos: " << " Resultados: "<< V_local_Kokkos_SIMD << std::endl;
 
       PetscScalar *stdv_q_ptr;
       PetscCall(DMSwarmGetField(Simulation.atomistic_data, "stdv-q", NULL, NULL,
@@ -939,59 +939,7 @@ std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones 
 
 
 
-  using simd_t = Kokkos::Experimental::native_simd<double>;
-  constexpr int W   = simd_t::size();
-  TeamPolicy policy3(n_sites_local, Kokkos::AUTO,Kokkos::AUTO);
-
-  const std::size_t bytes_per_thread3 = W * (MaxNumSites * ( 1 + MaxNumSites * (2 + NumberDimensions * NumberDimensions)) * sizeof(int) + sizeof(gaussian_measure_ctx_kokkos_s));
-  policy3.set_scratch_size(
-  0,
-  Kokkos::PerTeam(0),
-  Kokkos::PerThread(bytes_per_thread3)
-  );      
-
   double time_S0_i_adp_Kokkos = timer_S0_i_adp_Kokkos.seconds();
-
-  double L0_Local_Kokkos_SIMD = 0.0;
-  Kokkos::Timer timer_S0_i_adp_Kokkos_SIMD;
-  Kokkos::parallel_reduce(
-      "EvaluateFreeEntropy", 
-      policy3,
-      KOKKOS_LAMBDA(const Member& team, double& local_entropy) {
-        const int site_u = team.league_rank();
-        AtomTopology topology;
-        topology.numneigh       = numneigh_Kokkos_view(site_u);
-        topology.mech_neighs_ptr = mech_neighs_ptr_Kokkos_view.data() +
-                                atom_topology_offsets_view(site_u); 
-
-        char* mem = static_cast<char*>(
-        team.team_scratch(0).get_shmem(W * bytes_per_thread2)
-        );
-
-        gaussian_measure_ctx_kokkos_s ctxs[W];
-
-        for (int c = 0; c < W; ++c) {
-        char* base = mem + c * bytes_per_thread2;
-        gaussian_measure_ctx_kokkos_s* ctx_ptr = reinterpret_cast<gaussian_measure_ctx_kokkos_s*>(base);
-        ctxs[c] = *ctx_ptr; 
-        ctxs[c].dof_table     = reinterpret_cast<int*>(base + sizeof(gaussian_measure_ctx_kokkos_s));
-        ctxs[c].gp_board      = reinterpret_cast<int*>(base + sizeof(gaussian_measure_ctx_kokkos_s) + MaxNumSites * MaxNumSites *sizeof(int));
-        ctxs[c].dof_table_aux = reinterpret_cast<int*>(base + sizeof(gaussian_measure_ctx_kokkos_s) + (MaxNumSites * MaxNumSites * NumberDimensions * NumberDimensions + MaxNumSites * MaxNumSites) * sizeof(int));
-        ctxs[c].active_dof    = reinterpret_cast<int*>(base + sizeof(gaussian_measure_ctx_kokkos_s) + (MaxNumSites * MaxNumSites * NumberDimensions * NumberDimensions + 2 * (MaxNumSites * MaxNumSites)) * sizeof(int));
-        }
-          double S0_u = evaluate_S0_i_adp_MgHx_Kokkos_SIMD(
-              site_u, mean_q_Kokkos_Default, stdv_q_ptr_Kokkos_Default, xi_Kokkos_Default, 
-              mf_rho_Default, beta_ptr_Kokkos_Default, gamma_ptr_Kokkos_Default, atomSpecie_Kokkos_Default, 
-              topology, devSnapUM, element_mass_Device, ctxs, multipole_integral);
-  
-          //! @brief Update local contribution of the residual equation
-          local_entropy += k_B * S0_u;
-      },
-      L0_Local_Kokkos_SIMD);
-
-Kokkos::fence();
-double time_S0_i_adp_Kokkos_SIMD = timer_S0_i_adp_Kokkos_SIMD.seconds();
-
 
       Kokkos::Timer timer_S0_i_adp_Kokkos2;
       PetscScalar_Vector_Default retrieve_S0_results_Default("retrieve_S0_results_Default", n_sites_local);
@@ -1178,7 +1126,6 @@ double time_S0_i_adp_Kokkos_SIMD = timer_S0_i_adp_Kokkos_SIMD.seconds();
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: evaluate_S0_i_adp_MgHx " << time_S0_i_adp << " segundos" << " Resultados: " << L0_local << std::endl;
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y ThreadVectorRange: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos2 << " segundos" << " Resultados: " << L0_Local_Kokkos << std::endl;
-  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y SIMD explicito: evaluate_S0_i_adp_MgHx_Kokkos " << time_S0_i_adp_Kokkos_SIMD << " segundos" << " Resultados: " << L0_Local_Kokkos_SIMD << std::endl;
 
   
   unsigned int dim = NumberDimensions;
@@ -1449,7 +1396,7 @@ Kokkos::parallel_reduce("SumY_loc", Kokkos::RangePolicy<DefaultExecSpace>(0, n_m
 
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones sin Kokkos: " << time_DV_i_Dq_u_adp << " segundos:" << " Resultados: " << mean_host << std::endl;
   std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos: " << time_DV_i_Dq_u_adp_Kokkos << " segundos:" << " Resultados: " <<  mean_device << std::endl;
-  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y SIMD explicito: " << time_DV_i_Dq_u_adp_Kokkos_SIMD << " segundos:" << " Resultados: " <<  mean_device_SIMD << std::endl;
+  std::cout << "Rank " << rank_MPI << ": Tiempo que ha tardado en las operaciones con Kokkos y reorganización SIMD: " << time_DV_i_Dq_u_adp_Kokkos_SIMD << " segundos:" << " Resultados: " <<  mean_device_SIMD << std::endl;
 
   // Finalize Kokkos
   destroy_adp_MgHx(&adp_MgMg);

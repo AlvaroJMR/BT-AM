@@ -351,10 +351,6 @@
  {
  
  unsigned int dim = NumberDimensions;
- using simd_t = Kokkos::Experimental::native_simd<double>;
- using simd_int_t = Kokkos::Experimental::native_simd<int>;
- using mask_t  = typename simd_t::mask_type; 
- constexpr int W   = simd_t::size();
  
  double rho_i = rho(site_i);
  double V_embed_i = 0.0;  //! Embedded forces term
@@ -391,9 +387,6 @@
  double q_i0 = mean_q(site_i,0);
  double q_i1 = mean_q(site_i,1);
  double q_i2 = mean_q(site_i,2);
- simd_t qi0(q_i0);
- simd_t qi1(q_i1);
- simd_t qi2(q_i2);
 
 
  if (xi_j1 < min_occupancy) {
@@ -411,84 +404,6 @@
  V_pair_i += V_pair_ij;
  
  unsigned int idx_j2 = idx_j1;
- for (; idx_j2 + W < 1; idx_j2 += W) {
-
-
- simd_t qj10, qj11, qj12, qj20, qj21, qj22, n1, n2;
- simd_int_t spc_j1, spc_j2;
- simd_int_t sites_j1, sites_j2;
-
- sites_j1.copy_from(mech_neighs_i + idx_j1, Kokkos::Experimental::simd_flag_default);
- sites_j2.copy_from(mech_neighs_i + idx_j2, Kokkos::Experimental::simd_flag_default);
-
- for (int lane = 0; lane < W; ++lane) {
-  qj10[lane] = mean_q(sites_j1[lane],0);
-  qj11[lane] = mean_q(sites_j1[lane],1);
-  qj12[lane] = mean_q(sites_j1[lane],2);
-  n1[lane]   = xi(sites_j1[lane]);
-  spc_j1[lane] = specie(sites_j1[lane]);
-  qj20[lane] = mean_q(sites_j2[lane],0);
-  qj21[lane] = mean_q(sites_j2[lane],1);
-  qj22[lane] = mean_q(sites_j2[lane],2);
-  n2[lane]   = xi(sites_j2[lane]);
-  spc_j2[lane] = specie(sites_j2[lane]);
-  }
-
- simd_t factor_j1j2;
- for (int lane = 0; lane < W; ++lane) {
-   factor_j1j2[lane] = (idx_j2 + lane == idx_j1) ? 1.0 : 2.0;
- }
- 
- simd_t dr10 = qi0 - qj10;
- simd_t dr11 = qi1 - qj11;
- simd_t dr12 = qi2 - qj12;
-
- simd_t r1  = Kokkos::fma(dr10, dr10,
-              Kokkos::fma(dr11, dr11, dr12*dr12));
-
- simd_t dr20 = qi0 - qj20;
- simd_t dr21 = qi1 - qj21;
- simd_t dr22 = qi2 - qj22;
-
- simd_t r2  = Kokkos::fma(dr20, dr20,
-              Kokkos::fma(dr21, dr21, dr22*dr22));
-
- simd_t r1_r2 = Kokkos::fma(dr10, dr20,
-              Kokkos::fma(dr11, dr21, dr12*dr22));
-
- simd_t norm1 = Kokkos::sqrt(r1);
- simd_t norm2 = Kokkos::sqrt(r2);
-
- CubicSpline u_ij1[W], u_ij2[W], w_ij1[W], w_ij2[W];
- for (int lane = 0; lane < W; ++lane) {
-  u_ij1[lane] = (spc_i==Mg && spc_j1[lane]==Mg) ? u_iju_Mg  :
-                 (spc_i==H  && spc_j1[lane]==H ) ? u_iju_H   : u_iju_MgH;
-  u_ij2[lane] = (spc_i==Mg && spc_j2[lane]==Mg) ? u_iju_Mg  :
-                 (spc_i==H  && spc_j2[lane]==H ) ? u_iju_H   : u_iju_MgH;
- }
-  simd_t nn_u_ij1 =  xi_i * n1 * cubic_spline_Kokkos_SIMD<W>(u_ij1, norm1);
-  simd_t nn_u_ij2 =  xi_i * n2 * cubic_spline_Kokkos_SIMD<W>(u_ij2, norm2);
-  simd_t val = 0.5 * nn_u_ij1 * nn_u_ij2 * r1_r2;
-  simd_t result = factor_j1j2 * val;
-  for (int lane = 0; lane < W; ++lane) {
-  V_dip_i += result[lane];
-  }
-
-
- for (int lane = 0; lane < W; ++lane) {
-  w_ij1[lane] = (spc_i==Mg && spc_j1[lane]==Mg) ? u_ijw_Mg  :
-                 (spc_i==H  && spc_j1[lane]==H ) ? u_ijw_H   : u_ijw_MgH;
-  w_ij2[lane] = (spc_i==Mg && spc_j2[lane]==Mg) ? u_ijw_Mg  :
-                 (spc_i==H  && spc_j2[lane]==H ) ? u_ijw_H   : u_ijw_MgH;
- }
-  simd_t nn_w_ij1 =  xi_i * n1 * cubic_spline_Kokkos_SIMD<W>(w_ij1, norm1);
-  simd_t nn_w_ij2 =  xi_i * n2 * cubic_spline_Kokkos_SIMD<W>(w_ij2, norm2);
-  val = 0.5 * nn_w_ij1 * nn_w_ij2 * r1_r2 * r1_r2 - (nn_w_ij1 * nn_w_ij2 * r1 * r2) / simd_t(6.0);
-  result = factor_j1j2 * val;
-  for (int lane = 0; lane < W; ++lane) {
-  V_quad_i += result[lane];
-  }
- }
  for (; idx_j2 < numneigh_site_i; ++idx_j2) {
   unsigned site_j1 = mech_neighs_i[idx_j1];
   unsigned site_j2 = mech_neighs_i[idx_j2];
@@ -1316,10 +1231,6 @@
    const AtomTopology atom_topology_i,
    const DevSnapUnmanaged &soADevice)  //!
  {
- using simd_t = Kokkos::Experimental::native_simd<double>;
- using simd_int_t = Kokkos::Experimental::native_simd<int>;
- using mask_t     = typename simd_int_t::mask_type;
- constexpr int W   = simd_t::size();
  unsigned int dim = NumberDimensions;
  Kokkos::Array<double, 3>  D_V_i_Dq_i_star = {0.0, 0.0, 0.0};
  Kokkos::Array<double,3> result_d_rho_ij_dq = {0.0, 0.0, 0.0};
@@ -1335,11 +1246,6 @@
  double q_i1 = mean_q(site_i,1);
  double q_i2 = mean_q(site_i,2);
  bool isStar = (site_i_star == site_i);
- simd_int_t v_site(site_i_star);
- simd_t v_xi(xi(site_i_star));
- simd_t qi0(q_i0);
- simd_t qi1(q_i1);
- simd_t qi2(q_i2); 
  AtomicSpecie spc_i_star = specie(site_i_star);
  if ((spc_i_star == H) && (xi_i_star < min_occupancy)) {
    return D_V_i_Dq_i_star;
@@ -1351,7 +1257,6 @@
  const PetscInt *mech_neighs_i = atom_topology_i.mech_neighs_ptr;
  
  AtomicSpecie spc_i = specie(site_i);
- simd_int_t v_spc_i(static_cast<int>(spc_i));
  double xi_i = xi(site_i);
  auto mean_q_i = extractRowBlock(mean_q, site_i, 0, 3);
  
@@ -1360,105 +1265,6 @@
  }
  
  unsigned int idx_j1 = 0;
- for (; idx_j1 + W < 1; idx_j1+= W) {
-
-      simd_t qj0;
-      simd_t qj1;
-      simd_t qj2;
-      simd_t n;
-      simd_int_t spc_simd;
-      simd_int_t site_simd;
-      site_simd.copy_from(mech_neighs_i + idx_j1, Kokkos::Experimental::simd_flag_default);
-
-      for (int lane = 0; lane < W; ++lane) {
-        qj0[lane] = mean_q(site_simd[lane],0);
-        qj1[lane] = mean_q(site_simd[lane],1);
-        qj2[lane] = mean_q(site_simd[lane],2);
-        n[lane]   = xi(site_simd[lane]);
-        spc_simd[lane] = int(specie(site_simd[lane]));
-      }
-  
-      simd_t dr0 = qi0 - qj0;
-      simd_t dr1 = qi1 - qj1;
-      simd_t dr2 = qi2 - qj2;
-
-      simd_t r2  = Kokkos::fma(dr0, dr0,
-                   Kokkos::fma(dr1, dr1, dr2*dr2));
-      simd_t norm = Kokkos::sqrt(r2);
-
-      mask_t m_j = (site_simd == v_site);
-      mask_t nz = (norm > simd_t(0.0));
-
-      simd_t inv_norm_raw = simd_t(1.0) / norm;
-
-      simd_t inv_norm = Kokkos::Experimental::condition(nz, inv_norm_raw, simd_t(0.0));
-      simd_t d_pair;
-
-      simd_t d_rho_Mg = d_cubic_spline_Kokkos_SIMD(&rho_j_Mg, norm);
-      simd_t d_rho_H  = d_cubic_spline_Kokkos_SIMD(&rho_j_H,  norm);
-
-      mask_t is_Mg = (spc_simd == int(Mg));
-
-      simd_t d_rho = Kokkos::Experimental::condition(is_Mg, d_rho_Mg, d_rho_H);
-
-      simd_t fact_rho = n * d_rho * inv_norm;
-      simd_t c0 = dr0 * fact_rho;
-      simd_t c1 = dr1 * fact_rho;
-      simd_t c2 = dr2 * fact_rho;
- 
-    for (unsigned int direction = 0; direction < 2; direction++) {
-     for (int lane = 0; lane < W; ++lane) {
-        unsigned site_sel = direction == 0 ? site_i : site_simd[lane];
-        if (site_sel != site_i_star) continue;
-        if (direction == 0) {
-          result_d_rho_ij_dq[0] += c0[lane];
-          result_d_rho_ij_dq[1] += c1[lane];
-          result_d_rho_ij_dq[2] += c2[lane];
-        } else {
-          result_d_rho_ij_dq[0] -= c0[lane];
-          result_d_rho_ij_dq[1] -= c1[lane];
-          result_d_rho_ij_dq[2] -= c2[lane];
-        }
-   }
-  }
-
-    mask_t mask_MgMg = ((spc_simd == int(Mg)) && (v_spc_i == int(Mg)));
-    mask_t mask_HH   = ((spc_simd == int(H)) && (v_spc_i == int(H)));
-
-    simd_int_t any_int = Kokkos::Experimental::condition(mask_MgMg, simd_int_t(1), simd_int_t(0)); 
-    any_int = Kokkos::Experimental::condition(mask_HH, simd_int_t(1), any_int);    
-
-    mask_t mask_else = any_int == simd_int_t(0);
-
-    simd_t d_pair_MgMg = d_cubic_spline_Kokkos_SIMD(&pair_ij_MgMg, norm);
-    simd_t d_pair_HH   = d_cubic_spline_Kokkos_SIMD(&pair_ij_HH,   norm);
-    simd_t d_pair_MgH  = d_cubic_spline_Kokkos_SIMD(&pair_ij_MgH,  norm);
-
-    d_pair = Kokkos::Experimental::condition(mask_MgMg, d_pair_MgMg, simd_t(0.0));
-    d_pair = Kokkos::Experimental::condition(mask_HH, d_pair_HH, d_pair);
-    d_pair = Kokkos::Experimental::condition(mask_else, d_pair_MgH, d_pair);
-
-    simd_t fact_pair = v_xi * n * d_pair * inv_norm * simd_t(0.5);
-    simd_t p0 = dr0 * fact_pair;
-    simd_t p1 = dr1 * fact_pair;
-    simd_t p2 = dr2 * fact_pair;
-    
-    for (unsigned int direction = 0; direction < 2; direction++) {
-     for (int lane = 0; lane < W; ++lane) {
-        unsigned site_sel = direction == 0 ? site_i : site_simd[lane];
-        if (site_sel != site_i_star) continue;
-        if (direction == 0) {
-          result_dV_pair_ij_dq[0] += p0[lane];
-          result_dV_pair_ij_dq[1] += p1[lane];
-          result_dV_pair_ij_dq[2] += p2[lane];
-        } else {
-          result_dV_pair_ij_dq[0] -= p0[lane];
-          result_dV_pair_ij_dq[1] -= p1[lane];
-          result_dV_pair_ij_dq[2] -= p2[lane];
-        }
-   }
-  }   
- }
  for (; idx_j1 < numneigh_site_i; ++idx_j1) {
   unsigned site_j1 = mech_neighs_i[idx_j1];
   Kokkos::Array<int, 2>  sites_ij1 = Kokkos::Array<int, 2> {site_i, site_j1};
