@@ -25,6 +25,7 @@
 #include <petscsf.h>
 #include <petscvec.h>
 #include <Kokkos_Core.hpp>
+#include <Kokkos_SIMD.hpp>
 #include <Kokkos_DualView.hpp>
 
 

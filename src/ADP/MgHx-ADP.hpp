@@ -706,6 +706,90 @@ KOKKOS_INLINE_FUNCTION void V_dipole_ij1j2_kokkos(double* V_dipole_ij1j2, const 
       *V_dipole_ij1j2 = 0.5 * nn_u_ij1 * nn_u_ij2 * r_ij1__dot__r_ij2;
       
 }
+
+KOKKOS_INLINE_FUNCTION void V_dipole_ij1j2_kokkos_SIMD(double* V_dipole_ij1j2,
+  const double* const       n_ptrs[],
+  const double* const       q_ptrs[],
+  const AtomicSpecie* const spc_ptrs[],
+  SoADevice*                soADevice) {
+      
+  using simd_t = Kokkos::Experimental::native_simd<double>;
+  constexpr int W = simd_t::size();
+
+  for (int lane = 0; lane < W; ++lane) {
+    V_dipole_ij1j2[lane] = 0.0;
+  }
+
+  simd_t nj2;
+  simd_t ni(n_ptrs[0][0]);
+  simd_t nj1(n_ptrs[0][1]);
+
+  for(int lane=0; lane<W; ++lane){
+    nj2[lane] = n_ptrs[lane][2];
+  }
+
+  simd_t qj20, qj21, qj22;
+  simd_t qi0(q_ptrs[0][0]), qi1(q_ptrs[0][1]), qi2(q_ptrs[0][2]);
+  simd_t qj10(q_ptrs[0][3]), qj11(q_ptrs[0][4]), qj12(q_ptrs[0][5]);
+
+  for(int lane=0; lane<W; ++lane){
+    auto qp = q_ptrs[lane];
+    qj20[lane] = qp[6]; qj21[lane] = qp[7]; qj22[lane] = qp[8];
+  }
+
+  CubicSpline w_spl[3];
+  w_spl[0] = getSpline(AdpType::MgMg, SplineType::w, CubicSpline(), soADevice);
+  w_spl[1] = getSpline(AdpType::HH,  SplineType::w, CubicSpline(), soADevice);
+  w_spl[2] = getSpline(AdpType::MgH,  SplineType::w, CubicSpline(), soADevice);
+
+
+
+
+  simd_t dr10 = qi0 - qj10, dr11 = qi1 - qj11, dr12 = qi2 - qj12;
+  simd_t dr20 = qi0 - qj20, dr21 = qi1 - qj21, dr22 = qi2 - qj22;
+  simd_t r2_ij1 = dr10*dr10 + dr11*dr11 + dr12*dr12;
+  simd_t r2_ij2 = dr20*dr20 + dr21*dr21 + dr22*dr22;
+  simd_t dot12  = dr10*dr20 + dr11*dr21 + dr12*dr22;
+
+  simd_t norm1 = Kokkos::sqrt(r2_ij1);
+  simd_t norm2 = Kokkos::sqrt(r2_ij2);
+
+  double w1_arr[W], w2_arr[W];
+  for (int lane = 0; lane < W; ++lane) {
+    const AtomicSpecie* spc = spc_ptrs[lane];
+    CubicSpline w_ij1, w_ij2;
+
+    if ((spc[0] == Mg) && (spc[1] == Mg)) {
+      w_ij1 = w_spl[0];
+    } else if ((spc[0] == H) && (spc[1] == H)) {
+      w_ij1 = w_spl[1];
+    } else {
+      w_ij1 = w_spl[2];
+    }
+
+    if ((spc[0] == Mg) && (spc[2] == Mg)) {
+      w_ij2 = w_spl[0];
+    } else if ((spc[0] == H) && (spc[2] == H)) {
+      w_ij2 = w_spl[1];
+    } else {
+      w_ij2 = w_spl[2];
+    }
+
+    w1_arr[lane] = cubic_spline_Kokkos(&w_ij1, norm1[lane]);
+    w2_arr[lane] = cubic_spline_Kokkos(&w_ij2, norm2[lane]);
+  }
+
+  double result [W];
+  for (int lane = 0; lane < W; ++lane) {
+  double nnw1 = ni[lane] * nj1[lane] * w1_arr[lane];
+  double nnw2 = ni[lane] * nj2[lane] * w2_arr[lane];
+  result[lane] = 0.5 * nnw1 * nnw2 * (dot12[lane] * dot12[lane]);
+  }
+
+for (int lane = 0; lane < W; ++lane) {
+    V_dipole_ij1j2[lane] = result[lane];
+  }
+}
   
 KOKKOS_INLINE_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_ij2, const double* n,
         const double* q, const AtomicSpecie* spc, SoADevice *soADevice) {
@@ -756,6 +840,89 @@ KOKKOS_INLINE_FUNCTION void V_quadrupole_ij1j2_kokkos(double* V_quadrupole_ij1_i
       *V_quadrupole_ij1_ij2 =
       0.5 * nn_w_ij1 * nn_w_ij2 * dsqr(r_ij1__dot__r_ij2) -
        (nn_w_ij1 * nn_w_ij2 * r2_ij1 * r2_ij2) / 6.0;
+}
+
+
+KOKKOS_INLINE_FUNCTION void V_quadrupole_ij1j2_kokkos_SIMD(double* V_quadrupole_ij1j2,
+  const double* const       n_ptrs[],
+  const double* const       q_ptrs[],
+  const AtomicSpecie* const spc_ptrs[],
+  SoADevice*                soADevice) {
+      
+  using simd_t = Kokkos::Experimental::native_simd<double>;
+  constexpr int W = simd_t::size();
+  for (int lane = 0; lane < W; ++lane) {
+    V_quadrupole_ij1j2[lane] = 0.0;
+  }
+
+  simd_t nj2;
+  simd_t ni(n_ptrs[0][0]);
+  simd_t nj1(n_ptrs[0][1]);
+
+  for(int lane=0; lane<W; ++lane){
+    nj2[lane] = n_ptrs[lane][2];
+  }
+
+  simd_t qj20, qj21, qj22;
+  simd_t qi0(q_ptrs[0][0]), qi1(q_ptrs[0][1]), qi2(q_ptrs[0][2]);
+  simd_t qj10(q_ptrs[0][3]), qj11(q_ptrs[0][4]), qj12(q_ptrs[0][5]);
+
+  for(int lane=0; lane<W; ++lane){
+    auto qp = q_ptrs[lane];
+    qj20[lane] = qp[6]; qj21[lane] = qp[7]; qj22[lane] = qp[8];
+  }
+
+  CubicSpline w_spl[3];
+  w_spl[0] = getSpline(AdpType::MgMg, SplineType::w, CubicSpline(), soADevice);
+  w_spl[1] = getSpline(AdpType::HH,  SplineType::w, CubicSpline(), soADevice);
+  w_spl[2] = getSpline(AdpType::MgH,  SplineType::w, CubicSpline(), soADevice);
+
+
+  simd_t dr10 = qi0 - qj10, dr11 = qi1 - qj11, dr12 = qi2 - qj12;
+  simd_t dr20 = qi0 - qj20, dr21 = qi1 - qj21, dr22 = qi2 - qj22;
+  simd_t r2_ij1 = dr10*dr10 + dr11*dr11 + dr12*dr12;
+  simd_t r2_ij2 = dr20*dr20 + dr21*dr21 + dr22*dr22;
+  simd_t dot12  = dr10*dr20 + dr11*dr21 + dr12*dr22;
+
+  simd_t norm1 = Kokkos::sqrt(r2_ij1);
+  simd_t norm2 = Kokkos::sqrt(r2_ij2);
+
+    double w1_arr[W], w2_arr[W];
+  for (int lane = 0; lane < W; ++lane) {
+    const AtomicSpecie* spc = spc_ptrs[lane];
+    CubicSpline w_ij1, w_ij2;
+
+    if ((spc[0] == Mg) && (spc[1] == Mg)) {
+      w_ij1 = w_spl[0];
+    } else if ((spc[0] == H) && (spc[1] == H)) {
+      w_ij1 = w_spl[1];
+    } else {
+      w_ij1 = w_spl[2];
+    }
+
+    if ((spc[0] == Mg) && (spc[2] == Mg)) {
+      w_ij2 = w_spl[0];
+    } else if ((spc[0] == H) && (spc[2] == H)) {
+      w_ij2 = w_spl[1];
+    } else {
+      w_ij2 = w_spl[2];
+    }
+
+    w1_arr[lane] = cubic_spline_Kokkos(&w_ij1, norm1[lane]);
+    w2_arr[lane] = cubic_spline_Kokkos(&w_ij2, norm2[lane]);
+  }
+
+
+double result [W];
+for (int lane = 0; lane < W; ++lane) {
+    double nnw1 = ni[lane] * nj1[lane] * w1_arr[lane];
+    double nnw2 = ni[lane] * nj2[lane] * w2_arr[lane];
+    result[lane] = 0.5 * nnw1 * nnw2 * (dot12[lane] * dot12[lane]) - (nnw1 * nnw2 * r2_ij1[lane] * r2_ij2[lane]) / 6.0;
+}
+
+for (int lane = 0; lane < W; ++lane) {
+  V_quadrupole_ij1j2[lane] = result[lane];
+}
 }
   
 KOKKOS_FUNCTION void d2_rho_ij_dq2_FD_Kokkos(int direction, double* d2_rho_ij_dq,
@@ -860,7 +1027,7 @@ KOKKOS_FUNCTION void dV_quadrupole_ij1j2_dq_kokkos(int direction,
   const double* n, const double* q,
   const AtomicSpecie* spc, const SoADevice* soaDevice);  
 
-enum class Functions_Enum : int { F = 0, FK = 1, FK2 = 2, d2F_dq2_FD = 3, d2F_dq2 = 4, dF_dq_k = 5 };
+enum class Functions_Enum : int { F = 0, FK = 1, FK2 = 2, d2F_dq2_FD = 3, d2F_dq2 = 4, dF_dq_k = 5, FKS = 6 };
 
 struct rho_ij_adp_MgHx_dispatcher {
   Functions_Enum functions_Enum;
@@ -972,6 +1139,43 @@ struct V_quadrupole_ij1j2_dispatcher {
       case Functions_Enum::dF_dq_k:
         dV_quadrupole_ij1j2_dq_kokkos(direction, value, n, q, spc, soADevice);
         break;                        
+    }
+  }
+};
+
+
+struct V_dipole_ij1j2_SIMD_dispatcher {
+  Functions_Enum            functions_Enum;
+  double*                   value;
+  const double* const*      n_ptrs;
+  const double* const*      q_ptrs;
+  const AtomicSpecie* const* spc_ptrs;
+  SoADevice*                soADevice;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()() const {
+    switch(functions_Enum) {
+      case Functions_Enum::FKS:
+        V_dipole_ij1j2_kokkos_SIMD(value, n_ptrs, q_ptrs, spc_ptrs, soADevice);
+        break;
+    }
+  }
+};
+
+struct V_quadrupole_ij1j2_SIMD_dispatcher {
+  Functions_Enum            functions_Enum;
+  double*                   value;
+  const double* const*      n_ptrs;
+  const double* const*      q_ptrs;
+  const AtomicSpecie* const* spc_ptrs;
+  SoADevice*                soADevice;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()() const {
+    switch(functions_Enum) {
+      case Functions_Enum::FKS:
+        V_quadrupole_ij1j2_kokkos_SIMD(value, n_ptrs, q_ptrs, spc_ptrs, soADevice);
+        break;
     }
   }
 };

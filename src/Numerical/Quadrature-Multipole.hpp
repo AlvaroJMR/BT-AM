@@ -59,8 +59,6 @@ KOKKOS_INLINE_FUNCTION void meanfield_integral_mp_Kokkos(double* integral_f,
 
   unsigned int dim = NumberDimensions;
 
-  Kokkos::printf("meanfield_integral_mp_Kokkos");
-
   //! Read integral context
   // clang-format off
   unsigned int num_sites = ((gaussian_measure_ctx*)ctx_measure)->num_sites;

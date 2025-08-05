@@ -61,8 +61,7 @@ void multi_sum_scaled (const DestView dest,
 
 KOKKOS_INLINE_FUNCTION
 double dsqr(double x) {
-  double t = x;                            
-  return (t == 0.0) ? 0.0 : t * t;
+  return (x == 0.0) ? 0.0 : x * x;
 }
 
 
